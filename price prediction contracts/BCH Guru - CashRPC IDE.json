@@ -1,0 +1,744 @@
+{
+  "version": "0.1",
+  "name": "BCH Guru",
+  "description": "This is the BCH Guru Team's contract implemented with the Pre-Alpha version of CashConnect.",
+  "contracts": [
+    {
+      "name": "PvpBchOffer",
+      "source": "pragma cashscript ^0.9.2;\n\n// BCH Guru smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a guru offer to predict the price for some asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 accepts the bet by adding a predetermined amount BCH to the Guru offer\n// He adds his prediction and payout address to the NFT of the Guru contract\n// Both players have now commited to their prediction inside the Guru contract\n// The prediction of Player1 is revealed at payout\n\n// Opcode count: 59 (max 201)\n// Bytesize: 98 excl. constructor args (max 520)\n\ncontract PvpBchOffer(\n    int expiryTimestamp,\n    bytes35 gameContractBchLockingBytecode, // p2sh32 lockingBytecode, player 1 commits to his prediction with the hash of his datasig\n    bytes20 player1PubkeyHash,\n    bytes player1LockingBytecode,\n    int player2Amount\n) {\n    function acceptOffer(\n        bytes4 player2Prediction,\n        bytes25 player2LockingBytecode // p2pkh lockingBytecode\n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == gameContractBchLockingBytecode);\n\n        int totalAmount = tx.inputs[0].value + player2Amount - 1000;\n        require(tx.outputs[0].value == totalAmount);\n        \n        // Require that Player 2's prediction is 4 bytes long and a positive number.\n        require(player2Prediction.length == 4);\n        require(int(player2Prediction) >= 0);\n\n        // Require that the Locking Bytecode is P2SH32 if it is 35 bytes long.\n        // OP_HASH256[0xaa] OP_DATA_32[0x20] <32 bytes> OP_EQUAL[0x87]\n        if(player2LockingBytecode.length == 35) {\n            require(player2LockingBytecode.split(2)[0] == 0xaa20);\n            require(player2LockingBytecode.split(34)[1] == 0x87);\n        }\n\n        // Otherwise, require that the Locking Bytecode is P2PKH.\n        // OP_DUP[0x76] OP_HASH160[0xa9] OP_DATA_20[0x14] <20 bytes> OP_EQUALVERIFY[0x88] OP_CHECKSIG[0xac]\n        else {\n            require(player2LockingBytecode.split(3)[0] == 0x76a914);\n            require(player2LockingBytecode.split(23)[1] == 0x88ac);\n        }\n\n        // require correct NFTcommitment data (max 40 bytes)\n        bytes dataPlayer2 = player2Prediction + player2LockingBytecode;\n        require(tx.outputs[0].nftCommitment == dataPlayer2);\n    }\n    function expiry(\n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        int amountAfterFee = tx.inputs[0].value - 1000;\n        require(tx.outputs[0].value == amountAfterFee);\n        require(tx.time >= expiryTimestamp);\n    }\n    function cancel(\n        sig player1Sig,\n        pubkey player1Pubkey\n    ) {\n        require(hash160(player1Pubkey) == player1PubkeyHash);\n        require(checkSig(player1Sig,player1Pubkey));\n    }\n}\n",
+      "artifact": {
+        "contractName": "PvpBchOffer",
+        "constructorInputs": [
+          {
+            "name": "expiryTimestamp",
+            "type": "int"
+          },
+          {
+            "name": "gameContractBchLockingBytecode",
+            "type": "bytes35"
+          },
+          {
+            "name": "player1PubkeyHash",
+            "type": "bytes20"
+          },
+          {
+            "name": "player1LockingBytecode",
+            "type": "bytes"
+          },
+          {
+            "name": "player2Amount",
+            "type": "int"
+          }
+        ],
+        "abi": [
+          {
+            "name": "acceptOffer",
+            "inputs": [
+              {
+                "name": "player2Prediction",
+                "type": "bytes4"
+              },
+              {
+                "name": "player2LockingBytecode",
+                "type": "bytes25"
+              }
+            ]
+          },
+          {
+            "name": "expiry",
+            "inputs": []
+          },
+          {
+            "name": "cancel",
+            "inputs": [
+              {
+                "name": "player1Sig",
+                "type": "sig"
+              },
+              {
+                "name": "player1Pubkey",
+                "type": "pubkey"
+              }
+            ]
+          }
+        ],
+        "bytecode": "OP_5 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_0 OP_UTXOVALUE OP_4 OP_ROLL OP_ADD e803 OP_SUB OP_0 OP_OUTPUTVALUE OP_NUMEQUALVERIFY OP_4 OP_PICK OP_SIZE OP_NIP OP_4 OP_NUMEQUALVERIFY OP_4 OP_PICK OP_BIN2NUM OP_0 OP_GREATERTHANOREQUAL OP_VERIFY OP_5 OP_PICK OP_SIZE OP_NIP 23 OP_NUMEQUAL OP_IF OP_5 OP_PICK OP_2 OP_SPLIT OP_DROP aa20 OP_EQUALVERIFY OP_5 OP_PICK 22 OP_SPLIT OP_NIP 87 OP_EQUALVERIFY OP_ELSE OP_5 OP_PICK OP_3 OP_SPLIT OP_DROP 76a914 OP_EQUALVERIFY OP_5 OP_PICK 17 OP_SPLIT OP_NIP 88ac OP_EQUALVERIFY OP_ENDIF OP_2ROT OP_SWAP OP_CAT OP_0 OP_OUTPUTTOKENCOMMITMENT OP_EQUALVERIFY OP_2DROP OP_2DROP OP_1 OP_ELSE OP_5 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_4 OP_ROLL OP_EQUALVERIFY OP_0 OP_UTXOVALUE e803 OP_SUB OP_0 OP_OUTPUTVALUE OP_NUMEQUALVERIFY OP_CHECKLOCKTIMEVERIFY OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_5 OP_ROLL OP_2 OP_NUMEQUALVERIFY OP_6 OP_PICK OP_HASH160 OP_3 OP_ROLL OP_EQUALVERIFY OP_2ROT OP_SWAP OP_CHECKSIGVERIFY OP_2DROP OP_2DROP OP_1 OP_ENDIF OP_ENDIF",
+        "source": "pragma cashscript ^0.9.2;\n\n// BCH Guru smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a guru offer to predict the price for some asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 accepts the bet by adding a predetermined amount BCH to the Guru offer\n// He adds his prediction and payout address to the NFT of the Guru contract\n// Both players have now commited to their prediction inside the Guru contract\n// The prediction of Player1 is revealed at payout\n\n// Opcode count: 59 (max 201)\n// Bytesize: 98 excl. constructor args (max 520)\n\ncontract PvpBchOffer(\n    int expiryTimestamp,\n    bytes35 gameContractBchLockingBytecode, // p2sh32 lockingBytecode, player 1 commits to his prediction with the hash of his datasig\n    bytes20 player1PubkeyHash,\n    bytes player1LockingBytecode,\n    int player2Amount\n) {\n    function acceptOffer(\n        bytes4 player2Prediction,\n        bytes25 player2LockingBytecode // p2pkh lockingBytecode\n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == gameContractBchLockingBytecode);\n\n        int totalAmount = tx.inputs[0].value + player2Amount - 1000;\n        require(tx.outputs[0].value == totalAmount);\n        \n        // Require that Player 2's prediction is 4 bytes long and a positive number.\n        require(player2Prediction.length == 4);\n        require(int(player2Prediction) >= 0);\n\n        // Require that the Locking Bytecode is P2SH32 if it is 35 bytes long.\n        // OP_HASH256[0xaa] OP_DATA_32[0x20] <32 bytes> OP_EQUAL[0x87]\n        if(player2LockingBytecode.length == 35) {\n            require(player2LockingBytecode.split(2)[0] == 0xaa20);\n            require(player2LockingBytecode.split(34)[1] == 0x87);\n        }\n\n        // Otherwise, require that the Locking Bytecode is P2PKH.\n        // OP_DUP[0x76] OP_HASH160[0xa9] OP_DATA_20[0x14] <20 bytes> OP_EQUALVERIFY[0x88] OP_CHECKSIG[0xac]\n        else {\n            require(player2LockingBytecode.split(3)[0] == 0x76a914);\n            require(player2LockingBytecode.split(23)[1] == 0x88ac);\n        }\n\n        // require correct NFTcommitment data (max 40 bytes)\n        bytes dataPlayer2 = player2Prediction + player2LockingBytecode;\n        require(tx.outputs[0].nftCommitment == dataPlayer2);\n    }\n    function expiry(\n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        int amountAfterFee = tx.inputs[0].value - 1000;\n        require(tx.outputs[0].value == amountAfterFee);\n        require(tx.time >= expiryTimestamp);\n    }\n    function cancel(\n        sig player1Sig,\n        pubkey player1Pubkey\n    ) {\n        require(hash160(player1Pubkey) == player1PubkeyHash);\n        require(checkSig(player1Sig,player1Pubkey));\n    }\n}\n",
+        "compiler": {
+          "name": "cashc",
+          "version": "0.9.2"
+        },
+        "updatedAt": "2024-09-06T09:39:53.879Z"
+      }
+    },
+    {
+      "name": "PvpBchGame",
+      "source": "pragma cashscript ^0.9.2;\n\n// BCH Guru smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a guru offer to predict the price for some asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 matches the funds locked in the Guru offer\n// He adds his prediction and payout address to the NFT of the Guru contract\n// Both players have now commited to their prediction inside the Guru contract\n// The prediction of Player1 is revealed at payout\n\n/*  ---NFT State---\n    bytes4 predictionPlayer2\n    bytes lockingBytecodePlayer2, // p2pkh or p2sh lockingBytecode\n*/\n\ncontract PvpBchGame(\n    int maturityTimestamp,\n    bytes guruFeeLockingBytecode,\n    bytes dividendFeeLockingBytecode,\n    bytes oracleFeeLockingBytecode,\n    pubkey oraclePublicKey,\n    pubkey player1Pubkey,\n    bytes32 player1DatasigHash,\n    bytes player1LockingBytecode // p2pkh lockingBytecode\n) {\n    function payout(\n        bytes player1PredictionMsg, // bytes4 prediction + bytes4 nonce \n        datasig player1Datasig, // revealed after contract creation\n        bytes settlementMessage,\n        datasig settlementSignature,\n        bytes previousMessage,\n        datasig previousSignature,\n    ) {\n    \t// Authenticate predictionMsgPlayer1 with the hash its datasignature\n        require(checkDataSig(player1Datasig, player1PredictionMsg, player1Pubkey));\n        require(player1DatasigHash == sha256(player1Datasig));\n\n        // Check that only a single input is used in this transaction\n        require(tx.inputs.length == 1);\n\n        // Authenticate the current and previous oracle message.\n        require(checkDataSig(previousSignature, previousMessage, oraclePublicKey));\n        require(checkDataSig(settlementSignature, settlementMessage, oraclePublicKey));\n\n        // Extract previous message's content sequence.\n        int previousSequence = int(previousMessage.split(8)[1].split(4)[0]);\n\n        // If the \"content sequence\" is negative it represents metadata rather than a price message\n        // and cannot be used inside the contract.\n        require(previousSequence > 0);\n\n        // Extract settlement message's content sequence.\n        int settlementSequence = int(settlementMessage.split(8)[1].split(4)[0]);\n\n        // Assert that the two messages connect without gaps.\n        require(settlementSequence - 1 == previousSequence);\n\n        // Extract the previous message's timestamp.\n        int previousTimestamp = int(previousMessage.split(4)[0]);\n        // Extract the settlement message's timestamp.\n        int settlementTimestamp = int(settlementMessage.split(4)[0]);\n\n        // Require previousTimestamp is before - and settlementTimestamp is after maturityTimestamp\n        require(previousTimestamp < maturityTimestamp);\n        require(settlementTimestamp >= maturityTimestamp);\n\n         // Extract the settlement message's price.\n        int oraclePrice = int(settlementMessage.split(12)[1]);\n\n        // Read Player2s prediction & lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes predictionPlayer2Bytes, bytes lockingBytecodePlayer2= commitmentdata.split(4);\n\n        // Read Player1s prediction\n        bytes predictionPlayer1Bytes = player1PredictionMsg.split(4)[0];\n        int predictionPlayer1 = int(predictionPlayer1Bytes);\n\n        // Calculate which player predicted the oracleprice at maturity better\n        int predictionErrorP1 = abs(predictionPlayer1 - oraclePrice);\n        int predictionPlayer2 = int(predictionPlayer2Bytes);\n        int predictionErrorP2 = abs(predictionPlayer2 - oraclePrice);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Other payout address is the player who was close to the settlet oracle price\n        // Or a 50-50 return when both players were just equally far off.\n        if (predictionErrorP1 != predictionErrorP2) {\n            // Require 3% fee (of the totalOuputAmount) to be paid out on index0 to guru fee address\n            int guruFee = totalOuputAmount * 3 / 100;\n            require(tx.outputs[0].value == guruFee);\n            require(tx.outputs[0].lockingBytecode == guruFeeLockingBytecode);\n\n            // Require 2% fee (of the totalOuputAmount) to be paid out on index1 to guru dividend address\n            int dividendFee = totalOuputAmount * 2 / 100;\n            require(tx.outputs[1].value == dividendFee);\n            require(tx.outputs[1].lockingBytecode == dividendFeeLockingBytecode);\n\n            // Require 1% fee (of the totalOuputAmount) to be paid out on index2 to oracle fee address\n            int oracleFee = totalOuputAmount / 100;\n            require(tx.outputs[2].value == oracleFee);\n            require(tx.outputs[2].lockingBytecode == oracleFeeLockingBytecode);\n\n            int remainingBalance = totalOuputAmount - guruFee - dividendFee - oracleFee;\n\n            require(tx.outputs[3].value == remainingBalance);\n            bytes LockingBytecodePayout = player1LockingBytecode;\n            if(predictionErrorP1 > predictionErrorP2) LockingBytecodePayout = lockingBytecodePlayer2;\n            require(tx.outputs[3].lockingBytecode == LockingBytecodePayout);\n        } else {\n            require(tx.outputs[0].value == totalOuputAmount / 2);\n            require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n            require(tx.outputs[1].value == totalOuputAmount / 2);\n            require(tx.outputs[1].lockingBytecode == lockingBytecodePlayer2);\n        }\n    }\n    // If settlement fails to take place for 5 days, there is a fallback available which returns the funds to the players 50-50\n    // This could be used in case the oracle service fails or the settlement service would stop working\n    function timelockFallback(){\n        // Timelock for 5 days after the normal maturity timestamp\n        require(tx.time >= maturityTimestamp + 432000000);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Read Player2s lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes player2LockingBytecode = commitmentdata.split(8)[1];\n\n        // Funds are then returned 50-50 to the players\n        require(tx.outputs[0].value == totalOuputAmount / 2);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[1].value == totalOuputAmount / 2);\n        require(tx.outputs[1].lockingBytecode == player2LockingBytecode);\n    }\n}",
+      "artifact": {
+        "contractName": "PvpBchGame",
+        "constructorInputs": [
+          {
+            "name": "maturityTimestamp",
+            "type": "int"
+          },
+          {
+            "name": "guruFeeLockingBytecode",
+            "type": "bytes"
+          },
+          {
+            "name": "dividendFeeLockingBytecode",
+            "type": "bytes"
+          },
+          {
+            "name": "oracleFeeLockingBytecode",
+            "type": "bytes"
+          },
+          {
+            "name": "oraclePublicKey",
+            "type": "pubkey"
+          },
+          {
+            "name": "player1Pubkey",
+            "type": "pubkey"
+          },
+          {
+            "name": "player1DatasigHash",
+            "type": "bytes32"
+          },
+          {
+            "name": "player1LockingBytecode",
+            "type": "bytes"
+          }
+        ],
+        "abi": [
+          {
+            "name": "payout",
+            "inputs": [
+              {
+                "name": "player1PredictionMsg",
+                "type": "bytes"
+              },
+              {
+                "name": "player1Datasig",
+                "type": "datasig"
+              },
+              {
+                "name": "settlementMessage",
+                "type": "bytes"
+              },
+              {
+                "name": "settlementSignature",
+                "type": "datasig"
+              },
+              {
+                "name": "previousMessage",
+                "type": "bytes"
+              },
+              {
+                "name": "previousSignature",
+                "type": "datasig"
+              }
+            ]
+          },
+          {
+            "name": "timelockFallback",
+            "inputs": []
+          }
+        ],
+        "bytecode": "OP_8 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_10 OP_PICK OP_10 OP_PICK OP_7 OP_ROLL OP_CHECKDATASIGVERIFY OP_5 OP_ROLL OP_9 OP_ROLL OP_SHA256 OP_EQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_11 OP_ROLL OP_11 OP_PICK OP_6 OP_PICK OP_CHECKDATASIGVERIFY OP_9 OP_ROLL OP_9 OP_PICK OP_6 OP_ROLL OP_CHECKDATASIGVERIFY OP_8 OP_PICK OP_8 OP_SPLIT OP_NIP OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_DUP OP_0 OP_GREATERTHAN OP_VERIFY OP_8 OP_PICK OP_8 OP_SPLIT OP_NIP OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_1SUB OP_NUMEQUALVERIFY OP_8 OP_ROLL OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_8 OP_PICK OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_SWAP OP_2 OP_PICK OP_LESSTHAN OP_VERIFY OP_LESSTHANOREQUAL OP_VERIFY OP_6 OP_ROLL OP_12 OP_SPLIT OP_NIP OP_BIN2NUM OP_0 OP_UTXOTOKENCOMMITMENT OP_4 OP_SPLIT OP_8 OP_ROLL OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_3 OP_PICK OP_SUB OP_ABS OP_ROT OP_BIN2NUM OP_3 OP_ROLL OP_SUB OP_ABS OP_0 OP_UTXOVALUE e803 OP_SUB OP_2 OP_PICK OP_2 OP_PICK OP_NUMNOTEQUAL OP_IF OP_DUP OP_3 OP_MUL 64 OP_DIV OP_0 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_6 OP_PICK OP_EQUALVERIFY OP_OVER OP_2 OP_MUL 64 OP_DIV OP_1 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_8 OP_PICK OP_EQUALVERIFY OP_2 OP_PICK 64 OP_DIV OP_2 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_2 OP_OUTPUTBYTECODE OP_10 OP_PICK OP_EQUALVERIFY OP_2OVER OP_SUB OP_2 OP_PICK OP_SUB OP_OVER OP_SUB OP_3 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_11 OP_PICK OP_7 OP_PICK OP_7 OP_PICK OP_GREATERTHAN OP_IF OP_8 OP_PICK OP_NIP OP_ENDIF OP_3 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_2DROP OP_2DROP OP_DROP OP_ELSE OP_0 OP_OUTPUTVALUE OP_OVER OP_2 OP_DIV OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_8 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_OVER OP_2 OP_DIV OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_4 OP_PICK OP_EQUALVERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_8 OP_ROLL OP_1 OP_NUMEQUALVERIFY 00ccbf19 OP_ADD OP_CHECKLOCKTIMEVERIFY OP_DROP OP_0 OP_UTXOVALUE e803 OP_SUB OP_0 OP_UTXOTOKENCOMMITMENT OP_8 OP_SPLIT OP_NIP OP_0 OP_OUTPUTVALUE OP_2 OP_PICK OP_2 OP_DIV OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_9 OP_ROLL OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_ROT OP_2 OP_DIV OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_EQUALVERIFY OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ENDIF",
+        "source": "pragma cashscript ^0.9.2;\n\n// BCH Guru smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a guru offer to predict the price for some asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 matches the funds locked in the Guru offer\n// He adds his prediction and payout address to the NFT of the Guru contract\n// Both players have now commited to their prediction inside the Guru contract\n// The prediction of Player1 is revealed at payout\n\n/*  ---NFT State---\n    bytes4 predictionPlayer2\n    bytes lockingBytecodePlayer2, // p2pkh or p2sh lockingBytecode\n*/\n\ncontract PvpBchGame(\n    int maturityTimestamp,\n    bytes guruFeeLockingBytecode,\n    bytes dividendFeeLockingBytecode,\n    bytes oracleFeeLockingBytecode,\n    pubkey oraclePublicKey,\n    pubkey player1Pubkey,\n    bytes32 player1DatasigHash,\n    bytes player1LockingBytecode // p2pkh lockingBytecode\n) {\n    function payout(\n        bytes player1PredictionMsg, // bytes4 prediction + bytes4 nonce \n        datasig player1Datasig, // revealed after contract creation\n        bytes settlementMessage,\n        datasig settlementSignature,\n        bytes previousMessage,\n        datasig previousSignature,\n    ) {\n    \t// Authenticate predictionMsgPlayer1 with the hash its datasignature\n        require(checkDataSig(player1Datasig, player1PredictionMsg, player1Pubkey));\n        require(player1DatasigHash == sha256(player1Datasig));\n\n        // Check that only a single input is used in this transaction\n        require(tx.inputs.length == 1);\n\n        // Authenticate the current and previous oracle message.\n        require(checkDataSig(previousSignature, previousMessage, oraclePublicKey));\n        require(checkDataSig(settlementSignature, settlementMessage, oraclePublicKey));\n\n        // Extract previous message's content sequence.\n        int previousSequence = int(previousMessage.split(8)[1].split(4)[0]);\n\n        // If the \"content sequence\" is negative it represents metadata rather than a price message\n        // and cannot be used inside the contract.\n        require(previousSequence > 0);\n\n        // Extract settlement message's content sequence.\n        int settlementSequence = int(settlementMessage.split(8)[1].split(4)[0]);\n\n        // Assert that the two messages connect without gaps.\n        require(settlementSequence - 1 == previousSequence);\n\n        // Extract the previous message's timestamp.\n        int previousTimestamp = int(previousMessage.split(4)[0]);\n        // Extract the settlement message's timestamp.\n        int settlementTimestamp = int(settlementMessage.split(4)[0]);\n\n        // Require previousTimestamp is before - and settlementTimestamp is after maturityTimestamp\n        require(previousTimestamp < maturityTimestamp);\n        require(settlementTimestamp >= maturityTimestamp);\n\n         // Extract the settlement message's price.\n        int oraclePrice = int(settlementMessage.split(12)[1]);\n\n        // Read Player2s prediction & lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes predictionPlayer2Bytes, bytes lockingBytecodePlayer2= commitmentdata.split(4);\n\n        // Read Player1s prediction\n        bytes predictionPlayer1Bytes = player1PredictionMsg.split(4)[0];\n        int predictionPlayer1 = int(predictionPlayer1Bytes);\n\n        // Calculate which player predicted the oracleprice at maturity better\n        int predictionErrorP1 = abs(predictionPlayer1 - oraclePrice);\n        int predictionPlayer2 = int(predictionPlayer2Bytes);\n        int predictionErrorP2 = abs(predictionPlayer2 - oraclePrice);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Other payout address is the player who was close to the settlet oracle price\n        // Or a 50-50 return when both players were just equally far off.\n        if (predictionErrorP1 != predictionErrorP2) {\n            // Require 3% fee (of the totalOuputAmount) to be paid out on index0 to guru fee address\n            int guruFee = totalOuputAmount * 3 / 100;\n            require(tx.outputs[0].value == guruFee);\n            require(tx.outputs[0].lockingBytecode == guruFeeLockingBytecode);\n\n            // Require 2% fee (of the totalOuputAmount) to be paid out on index1 to guru dividend address\n            int dividendFee = totalOuputAmount * 2 / 100;\n            require(tx.outputs[1].value == dividendFee);\n            require(tx.outputs[1].lockingBytecode == dividendFeeLockingBytecode);\n\n            // Require 1% fee (of the totalOuputAmount) to be paid out on index2 to oracle fee address\n            int oracleFee = totalOuputAmount / 100;\n            require(tx.outputs[2].value == oracleFee);\n            require(tx.outputs[2].lockingBytecode == oracleFeeLockingBytecode);\n\n            int remainingBalance = totalOuputAmount - guruFee - dividendFee - oracleFee;\n\n            require(tx.outputs[3].value == remainingBalance);\n            bytes LockingBytecodePayout = player1LockingBytecode;\n            if(predictionErrorP1 > predictionErrorP2) LockingBytecodePayout = lockingBytecodePlayer2;\n            require(tx.outputs[3].lockingBytecode == LockingBytecodePayout);\n        } else {\n            require(tx.outputs[0].value == totalOuputAmount / 2);\n            require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n            require(tx.outputs[1].value == totalOuputAmount / 2);\n            require(tx.outputs[1].lockingBytecode == lockingBytecodePlayer2);\n        }\n    }\n    // If settlement fails to take place for 5 days, there is a fallback available which returns the funds to the players 50-50\n    // This could be used in case the oracle service fails or the settlement service would stop working\n    function timelockFallback(){\n        // Timelock for 5 days after the normal maturity timestamp\n        require(tx.time >= maturityTimestamp + 432000000);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Read Player2s lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes player2LockingBytecode = commitmentdata.split(8)[1];\n\n        // Funds are then returned 50-50 to the players\n        require(tx.outputs[0].value == totalOuputAmount / 2);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[1].value == totalOuputAmount / 2);\n        require(tx.outputs[1].lockingBytecode == player2LockingBytecode);\n    }\n}",
+        "compiler": {
+          "name": "cashc",
+          "version": "0.9.2"
+        },
+        "updatedAt": "2024-09-06T09:39:54.077Z"
+      }
+    },
+    {
+      "name": "PvpFuruOffer",
+      "source": "pragma cashscript ^0.9.2;\n\n// Furu-Play smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a furu offer to predict the price for a certain asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 accepts the bet by adding a predetermined amount of FURU tokens to the Furu offer\n// He adds his prediction and payout address to the NFT of the Furu contract\n// Both players have now commited to their prediction inside the Furu contract\n// The prediction of Player1 is revealed at payout\n\ncontract PvpFuruOffer(\n    int expiryTimestamp,\n    bytes35 gameContractFuruLockingBytecode, // p2sh32 lockingBytecode\n    bytes35 furuDepositoryContractLockingBytecode, // p2sh32 lockingBytecode\n    bytes20 player1PubkeyHash,\n    bytes player1LockingBytecode,\n    int player2Amount\n) {\n    function acceptOffer(\n        bytes4 player2Prediction,\n        bytes25 player2LockingBytecode // p2pkh lockingBytecode\n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == gameContractFuruLockingBytecode);\n        \n        // Require that Player 2's prediction is 4 bytes long and a positive number.\n        require(player2Prediction.length == 4);\n        require(int(player2Prediction) >= 0);\n\n        // Require that the Locking Bytecode is P2SH32 if it is 35 bytes long.\n        // OP_HASH256[0xaa] OP_DATA_32[0x20] <32 bytes> OP_EQUAL[0x87]\n        if(player2LockingBytecode.length == 35) {\n            require(player2LockingBytecode.split(2)[0] == 0xaa20);\n            require(player2LockingBytecode.split(34)[1] == 0x87);\n        }\n\n        // Otherwise, require that the Locking Bytecode is P2PKH.\n        // OP_DUP[0x76] OP_HASH160[0xa9] OP_DATA_20[0x14] <20 bytes> OP_EQUALVERIFY[0x88] OP_CHECKSIG[0xac]\n        else {\n            require(player2LockingBytecode.split(3)[0] == 0x76a914);\n            require(player2LockingBytecode.split(23)[1] == 0x88ac);\n        }\n\n        // tokens to furu depository covenant\n        int totalFuruAmount = tx.inputs[0].tokenAmount + player2Amount;\n        require(tx.outputs[1].tokenAmount == totalFuruAmount);\n        require(tx.outputs[1].tokenCategory == tx.inputs[0].tokenCategory);\n        require(tx.outputs[1].lockingBytecode == furuDepositoryContractLockingBytecode);\n\n        // verify NFTcommitment data\n        bytes dataPlayer2 = player2Prediction + player2LockingBytecode;\n        require(tx.outputs[0].nftCommitment == dataPlayer2);\n        require(tx.outputs[0].tokenAmount == 0);\n    }\n    function expiry(    \n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount);\n        require(tx.outputs[0].tokenCategory == tx.inputs[0].tokenCategory);\n        require(tx.time >= expiryTimestamp);\n    } \n    function cancel(\n        sig player1Sig,\n        pubkey player1Pubkey\n    ) {\n        require(hash160(player1Pubkey) == player1PubkeyHash);\n        require(checkSig(player1Sig, player1Pubkey));\n    } \n}\n",
+      "artifact": {
+        "contractName": "PvpFuruOffer",
+        "constructorInputs": [
+          {
+            "name": "expiryTimestamp",
+            "type": "int"
+          },
+          {
+            "name": "gameContractFuruLockingBytecode",
+            "type": "bytes35"
+          },
+          {
+            "name": "furuDepositoryContractLockingBytecode",
+            "type": "bytes35"
+          },
+          {
+            "name": "player1PubkeyHash",
+            "type": "bytes20"
+          },
+          {
+            "name": "player1LockingBytecode",
+            "type": "bytes"
+          },
+          {
+            "name": "player2Amount",
+            "type": "int"
+          }
+        ],
+        "abi": [
+          {
+            "name": "acceptOffer",
+            "inputs": [
+              {
+                "name": "player2Prediction",
+                "type": "bytes4"
+              },
+              {
+                "name": "player2LockingBytecode",
+                "type": "bytes25"
+              }
+            ]
+          },
+          {
+            "name": "expiry",
+            "inputs": []
+          },
+          {
+            "name": "cancel",
+            "inputs": [
+              {
+                "name": "player1Sig",
+                "type": "sig"
+              },
+              {
+                "name": "player1Pubkey",
+                "type": "pubkey"
+              }
+            ]
+          }
+        ],
+        "bytecode": "OP_6 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_6 OP_PICK OP_SIZE OP_NIP OP_4 OP_NUMEQUALVERIFY OP_6 OP_PICK OP_BIN2NUM OP_0 OP_GREATERTHANOREQUAL OP_VERIFY OP_7 OP_PICK OP_SIZE OP_NIP 23 OP_NUMEQUAL OP_IF OP_7 OP_PICK OP_2 OP_SPLIT OP_DROP aa20 OP_EQUALVERIFY OP_7 OP_PICK 22 OP_SPLIT OP_NIP 87 OP_EQUALVERIFY OP_ELSE OP_7 OP_PICK OP_3 OP_SPLIT OP_DROP 76a914 OP_EQUALVERIFY OP_7 OP_PICK 17 OP_SPLIT OP_NIP 88ac OP_EQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENAMOUNT OP_5 OP_ROLL OP_ADD OP_1 OP_OUTPUTTOKENAMOUNT OP_NUMEQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_UTXOTOKENCATEGORY OP_EQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_2ROT OP_SWAP OP_CAT OP_0 OP_OUTPUTTOKENCOMMITMENT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_NUMEQUALVERIFY OP_2DROP OP_2DROP OP_1 OP_ELSE OP_6 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_5 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_UTXOTOKENAMOUNT OP_NUMEQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_UTXOTOKENCATEGORY OP_EQUALVERIFY OP_CHECKLOCKTIMEVERIFY OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ELSE OP_6 OP_ROLL OP_2 OP_NUMEQUALVERIFY OP_7 OP_PICK OP_HASH160 OP_4 OP_ROLL OP_EQUALVERIFY OP_5 OP_ROLL OP_6 OP_ROLL OP_CHECKSIGVERIFY OP_2DROP OP_2DROP OP_DROP OP_1 OP_ENDIF OP_ENDIF",
+        "source": "pragma cashscript ^0.9.2;\n\n// Furu-Play smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a furu offer to predict the price for a certain asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 accepts the bet by adding a predetermined amount of FURU tokens to the Furu offer\n// He adds his prediction and payout address to the NFT of the Furu contract\n// Both players have now commited to their prediction inside the Furu contract\n// The prediction of Player1 is revealed at payout\n\ncontract PvpFuruOffer(\n    int expiryTimestamp,\n    bytes35 gameContractFuruLockingBytecode, // p2sh32 lockingBytecode\n    bytes35 furuDepositoryContractLockingBytecode, // p2sh32 lockingBytecode\n    bytes20 player1PubkeyHash,\n    bytes player1LockingBytecode,\n    int player2Amount\n) {\n    function acceptOffer(\n        bytes4 player2Prediction,\n        bytes25 player2LockingBytecode // p2pkh lockingBytecode\n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == gameContractFuruLockingBytecode);\n        \n        // Require that Player 2's prediction is 4 bytes long and a positive number.\n        require(player2Prediction.length == 4);\n        require(int(player2Prediction) >= 0);\n\n        // Require that the Locking Bytecode is P2SH32 if it is 35 bytes long.\n        // OP_HASH256[0xaa] OP_DATA_32[0x20] <32 bytes> OP_EQUAL[0x87]\n        if(player2LockingBytecode.length == 35) {\n            require(player2LockingBytecode.split(2)[0] == 0xaa20);\n            require(player2LockingBytecode.split(34)[1] == 0x87);\n        }\n\n        // Otherwise, require that the Locking Bytecode is P2PKH.\n        // OP_DUP[0x76] OP_HASH160[0xa9] OP_DATA_20[0x14] <20 bytes> OP_EQUALVERIFY[0x88] OP_CHECKSIG[0xac]\n        else {\n            require(player2LockingBytecode.split(3)[0] == 0x76a914);\n            require(player2LockingBytecode.split(23)[1] == 0x88ac);\n        }\n\n        // tokens to furu depository covenant\n        int totalFuruAmount = tx.inputs[0].tokenAmount + player2Amount;\n        require(tx.outputs[1].tokenAmount == totalFuruAmount);\n        require(tx.outputs[1].tokenCategory == tx.inputs[0].tokenCategory);\n        require(tx.outputs[1].lockingBytecode == furuDepositoryContractLockingBytecode);\n\n        // verify NFTcommitment data\n        bytes dataPlayer2 = player2Prediction + player2LockingBytecode;\n        require(tx.outputs[0].nftCommitment == dataPlayer2);\n        require(tx.outputs[0].tokenAmount == 0);\n    }\n    function expiry(    \n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount);\n        require(tx.outputs[0].tokenCategory == tx.inputs[0].tokenCategory);\n        require(tx.time >= expiryTimestamp);\n    } \n    function cancel(\n        sig player1Sig,\n        pubkey player1Pubkey\n    ) {\n        require(hash160(player1Pubkey) == player1PubkeyHash);\n        require(checkSig(player1Sig, player1Pubkey));\n    } \n}\n",
+        "compiler": {
+          "name": "cashc",
+          "version": "0.9.2"
+        },
+        "updatedAt": "2024-09-06T09:39:54.146Z"
+      }
+    },
+    {
+      "name": "PvpFuruDepository",
+      "source": "pragma cashscript ^0.9.2;\n\n// FuruDepository is created along the furu contract\n// The contract holds the furu tokens to be paid out to the winner\n\ncontract PvpFuruDepository(\n) {\n    function reattach() {\n        // FuruDepository can only be moved along side furu contract\n        require(tx.inputs[0].outpointTransactionHash == tx.inputs[1].outpointTransactionHash);\n        require(tx.inputs[1].outpointIndex == 1);\n    }\n}\n",
+      "artifact": {
+        "contractName": "PvpFuruDepository",
+        "constructorInputs": [],
+        "abi": [
+          {
+            "name": "reattach",
+            "inputs": []
+          }
+        ],
+        "bytecode": "OP_0 OP_OUTPOINTTXHASH OP_1 OP_OUTPOINTTXHASH OP_EQUALVERIFY OP_1 OP_OUTPOINTINDEX OP_1 OP_NUMEQUAL",
+        "source": "pragma cashscript ^0.9.2;\n\n// FuruDepository is created along the furu contract\n// The contract holds the furu tokens to be paid out to the winner\n\ncontract PvpFuruDepository(\n) {\n    function reattach() {\n        // FuruDepository can only be moved along side furu contract\n        require(tx.inputs[0].outpointTransactionHash == tx.inputs[1].outpointTransactionHash);\n        require(tx.inputs[1].outpointIndex == 1);\n    }\n}\n",
+        "compiler": {
+          "name": "cashc",
+          "version": "0.9.2"
+        },
+        "updatedAt": "2024-09-06T09:39:54.154Z"
+      }
+    },
+    {
+      "name": "PvpFuruGame",
+      "source": "pragma cashscript ^0.9.2;\n\n// Furu-Play smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a guru offer to predict the price for some asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 matches the funds locked in the Furu offer\n// He adds his prediction and payout address to the NFT of the Furu contract\n// Both players have now commited to their prediction inside the Furu contract\n// The prediction of Player1 is revealed at payout\n\n/*  ---NFT State---\n    bytes4 predictionPlayer2\n    bytes25 lockingBytecodePlayer2, // p2pkh lockingBytecode\n*/\n\ncontract PvpFuruGame(\n    int maturityTimestamp,\n    pubkey oraclePublicKey,\n    pubkey player1Pubkey,\n    bytes32 player1DatasigHash,\n    bytes25 player1LockingBytecode // p2pkh lockingBytecode\n) {\n    function payout(\n    \tbytes player1PredictionMsg,\n    \tdatasig player1Datasig, // revealed after contract creation\n    \tbytes settlementMessage,\n        datasig settlementSignature,\n        bytes previousMessage,\n        datasig previousSignature,\n    ) {\n    \t// Authenticate predictionPlayer1 with the hash its datasignature\n        require(checkDataSig(player1Datasig, player1PredictionMsg, player1Pubkey));\n        require(player1DatasigHash == sha256(player1Datasig));\n\n        // Check that there ar 2 inputs with Furu Contract at input index 0\n        require(tx.inputs.length == 2);\n        require(this.activeInputIndex == 0);\n\n        // Furu,Contract can only be moved along side FuruDepository\n        require(tx.inputs[0].outpointTransactionHash == tx.inputs[1].outpointTransactionHash);\n        require(tx.inputs[1].outpointIndex == 1);\n\n        // Authenticate the current and previous oracle message.\n        require(checkDataSig(previousSignature, previousMessage, oraclePublicKey));\n        require(checkDataSig(settlementSignature, settlementMessage, oraclePublicKey));\n\n        // Extract previous message's content sequence.\n        int previousSequence = int(previousMessage.split(8)[1].split(4)[0]);\n\n        // If the \"content sequence\" is negative it represents metadata rather than a price message\n        // and cannot be used inside the contract.\n        require(previousSequence > 0);\n\n        // Extract settlement message's content sequence.\n        int settlementSequence = int(settlementMessage.split(8)[1].split(4)[0]);\n\n        // Assert that the two messages connect without gaps.\n        require(settlementSequence - 1 == previousSequence);\n\n        // Extract the previous message's timestamp.\n        int previousTimestamp = int(previousMessage.split(4)[0]);\n        // Extract the settlement message's timestamp.\n        int settlementTimestamp = int(settlementMessage.split(4)[0]);\n\n        // Require previousTimestamp is before - and settlementTimestamp is after maturityTimestamp\n        require(previousTimestamp < maturityTimestamp);\n        require(settlementTimestamp >= maturityTimestamp);\n\n         // Extract the settlement message's price.\n        int oraclePrice = int(settlementMessage.split(12)[1]);\n\n        // Read Player2s prediction & lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes predictionPlayer2Bytes, bytes player2LockingBytecode = commitmentdata.split(4);\n\n        // Read Player1s prediction\n        bytes predictionPlayer1Bytes = player1PredictionMsg.split(4)[0];\n        int predictionPlayer1 = int(predictionPlayer1Bytes);\n\n        // Calculate which player predicted the oracleprice at maturity better\n        int predictionErrorP1 = abs(predictionPlayer1 - oraclePrice);\n        int player2Prediction = int(predictionPlayer2Bytes);\n        int predictionErrorP2 = abs(player2Prediction - oraclePrice);\n\n        // No need for platform fees\n        // Getting total furu amount through introspection\n        int furuTotal = tx.inputs[1].tokenAmount;\n\n        // Other payout address is the player who was close to the settlet oracle price\n        // Or a 50-50 return when both players were just equally far off.\n        if (predictionErrorP1 != predictionErrorP2) {\n            require(tx.outputs[0].tokenAmount == furuTotal);\n            bytes LockingBytecodePayout = player1LockingBytecode;\n            if(predictionErrorP1 > predictionErrorP2) LockingBytecodePayout = player2LockingBytecode;\n            require(tx.outputs[0].lockingBytecode == LockingBytecodePayout);\n        } else {\n            require(tx.outputs[0].tokenAmount == furuTotal / 2);\n            require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n            require(tx.outputs[1].tokenAmount == furuTotal / 2);\n            require(tx.outputs[1].lockingBytecode == player2LockingBytecode);\n        }\n    }\n    // If settlement fails to take place for 5 days, there is a fallback available which returns the funds to the players 50-50\n    // This could be used in case the oracle service fails or the settlement service would stop working\n    function timelockFallback(){\n        // Timelock for 5 days after the normal maturity timestamp\n        require(tx.time >= maturityTimestamp + 432000000);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Read Player2s lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes player2LockingBytecode = commitmentdata.split(8)[1];\n\n        // Funds are then returned 50-50 to the players\n        require(tx.outputs[0].value == totalOuputAmount / 2);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[1].value == totalOuputAmount / 2);\n        require(tx.outputs[1].lockingBytecode == player2LockingBytecode);\n    }\n}\n",
+      "artifact": {
+        "contractName": "PvpFuruGame",
+        "constructorInputs": [
+          {
+            "name": "maturityTimestamp",
+            "type": "int"
+          },
+          {
+            "name": "oraclePublicKey",
+            "type": "pubkey"
+          },
+          {
+            "name": "player1Pubkey",
+            "type": "pubkey"
+          },
+          {
+            "name": "player1DatasigHash",
+            "type": "bytes32"
+          },
+          {
+            "name": "player1LockingBytecode",
+            "type": "bytes25"
+          }
+        ],
+        "abi": [
+          {
+            "name": "payout",
+            "inputs": [
+              {
+                "name": "player1PredictionMsg",
+                "type": "bytes"
+              },
+              {
+                "name": "player1Datasig",
+                "type": "datasig"
+              },
+              {
+                "name": "settlementMessage",
+                "type": "bytes"
+              },
+              {
+                "name": "settlementSignature",
+                "type": "datasig"
+              },
+              {
+                "name": "previousMessage",
+                "type": "bytes"
+              },
+              {
+                "name": "previousSignature",
+                "type": "datasig"
+              }
+            ]
+          },
+          {
+            "name": "timelockFallback",
+            "inputs": []
+          }
+        ],
+        "bytecode": "OP_5 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_7 OP_PICK OP_7 OP_PICK OP_4 OP_ROLL OP_CHECKDATASIGVERIFY OP_ROT OP_6 OP_ROLL OP_SHA256 OP_EQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUALVERIFY OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_0 OP_OUTPOINTTXHASH OP_1 OP_OUTPOINTTXHASH OP_EQUALVERIFY OP_1 OP_OUTPOINTINDEX OP_1 OP_NUMEQUALVERIFY OP_8 OP_ROLL OP_8 OP_PICK OP_3 OP_PICK OP_CHECKDATASIGVERIFY OP_6 OP_ROLL OP_6 OP_PICK OP_3 OP_ROLL OP_CHECKDATASIGVERIFY OP_5 OP_PICK OP_8 OP_SPLIT OP_NIP OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_DUP OP_0 OP_GREATERTHAN OP_VERIFY OP_5 OP_PICK OP_8 OP_SPLIT OP_NIP OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_1SUB OP_NUMEQUALVERIFY OP_5 OP_ROLL OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_5 OP_PICK OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_SWAP OP_2 OP_PICK OP_LESSTHAN OP_VERIFY OP_LESSTHANOREQUAL OP_VERIFY OP_3 OP_ROLL OP_12 OP_SPLIT OP_NIP OP_BIN2NUM OP_0 OP_UTXOTOKENCOMMITMENT OP_4 OP_SPLIT OP_5 OP_ROLL OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_3 OP_PICK OP_SUB OP_ABS OP_ROT OP_BIN2NUM OP_3 OP_ROLL OP_SUB OP_ABS OP_1 OP_UTXOTOKENAMOUNT OP_2 OP_PICK OP_2 OP_PICK OP_NUMNOTEQUAL OP_IF OP_0 OP_OUTPUTTOKENAMOUNT OP_OVER OP_NUMEQUALVERIFY OP_4 OP_PICK OP_2OVER OP_GREATERTHAN OP_IF OP_4 OP_PICK OP_NIP OP_ENDIF OP_0 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_DROP OP_ELSE OP_0 OP_OUTPUTTOKENAMOUNT OP_OVER OP_2 OP_DIV OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_5 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENAMOUNT OP_OVER OP_2 OP_DIV OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_4 OP_PICK OP_EQUALVERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ELSE OP_5 OP_ROLL OP_1 OP_NUMEQUALVERIFY 00ccbf19 OP_ADD OP_CHECKLOCKTIMEVERIFY OP_DROP OP_0 OP_UTXOVALUE e803 OP_SUB OP_0 OP_UTXOTOKENCOMMITMENT OP_8 OP_SPLIT OP_NIP OP_0 OP_OUTPUTVALUE OP_2 OP_PICK OP_2 OP_DIV OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_6 OP_ROLL OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_ROT OP_2 OP_DIV OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_EQUAL OP_NIP OP_NIP OP_NIP OP_ENDIF",
+        "source": "pragma cashscript ^0.9.2;\n\n// Furu-Play smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a guru offer to predict the price for some asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 matches the funds locked in the Furu offer\n// He adds his prediction and payout address to the NFT of the Furu contract\n// Both players have now commited to their prediction inside the Furu contract\n// The prediction of Player1 is revealed at payout\n\n/*  ---NFT State---\n    bytes4 predictionPlayer2\n    bytes25 lockingBytecodePlayer2, // p2pkh lockingBytecode\n*/\n\ncontract PvpFuruGame(\n    int maturityTimestamp,\n    pubkey oraclePublicKey,\n    pubkey player1Pubkey,\n    bytes32 player1DatasigHash,\n    bytes25 player1LockingBytecode // p2pkh lockingBytecode\n) {\n    function payout(\n    \tbytes player1PredictionMsg,\n    \tdatasig player1Datasig, // revealed after contract creation\n    \tbytes settlementMessage,\n        datasig settlementSignature,\n        bytes previousMessage,\n        datasig previousSignature,\n    ) {\n    \t// Authenticate predictionPlayer1 with the hash its datasignature\n        require(checkDataSig(player1Datasig, player1PredictionMsg, player1Pubkey));\n        require(player1DatasigHash == sha256(player1Datasig));\n\n        // Check that there ar 2 inputs with Furu Contract at input index 0\n        require(tx.inputs.length == 2);\n        require(this.activeInputIndex == 0);\n\n        // Furu,Contract can only be moved along side FuruDepository\n        require(tx.inputs[0].outpointTransactionHash == tx.inputs[1].outpointTransactionHash);\n        require(tx.inputs[1].outpointIndex == 1);\n\n        // Authenticate the current and previous oracle message.\n        require(checkDataSig(previousSignature, previousMessage, oraclePublicKey));\n        require(checkDataSig(settlementSignature, settlementMessage, oraclePublicKey));\n\n        // Extract previous message's content sequence.\n        int previousSequence = int(previousMessage.split(8)[1].split(4)[0]);\n\n        // If the \"content sequence\" is negative it represents metadata rather than a price message\n        // and cannot be used inside the contract.\n        require(previousSequence > 0);\n\n        // Extract settlement message's content sequence.\n        int settlementSequence = int(settlementMessage.split(8)[1].split(4)[0]);\n\n        // Assert that the two messages connect without gaps.\n        require(settlementSequence - 1 == previousSequence);\n\n        // Extract the previous message's timestamp.\n        int previousTimestamp = int(previousMessage.split(4)[0]);\n        // Extract the settlement message's timestamp.\n        int settlementTimestamp = int(settlementMessage.split(4)[0]);\n\n        // Require previousTimestamp is before - and settlementTimestamp is after maturityTimestamp\n        require(previousTimestamp < maturityTimestamp);\n        require(settlementTimestamp >= maturityTimestamp);\n\n         // Extract the settlement message's price.\n        int oraclePrice = int(settlementMessage.split(12)[1]);\n\n        // Read Player2s prediction & lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes predictionPlayer2Bytes, bytes player2LockingBytecode = commitmentdata.split(4);\n\n        // Read Player1s prediction\n        bytes predictionPlayer1Bytes = player1PredictionMsg.split(4)[0];\n        int predictionPlayer1 = int(predictionPlayer1Bytes);\n\n        // Calculate which player predicted the oracleprice at maturity better\n        int predictionErrorP1 = abs(predictionPlayer1 - oraclePrice);\n        int player2Prediction = int(predictionPlayer2Bytes);\n        int predictionErrorP2 = abs(player2Prediction - oraclePrice);\n\n        // No need for platform fees\n        // Getting total furu amount through introspection\n        int furuTotal = tx.inputs[1].tokenAmount;\n\n        // Other payout address is the player who was close to the settlet oracle price\n        // Or a 50-50 return when both players were just equally far off.\n        if (predictionErrorP1 != predictionErrorP2) {\n            require(tx.outputs[0].tokenAmount == furuTotal);\n            bytes LockingBytecodePayout = player1LockingBytecode;\n            if(predictionErrorP1 > predictionErrorP2) LockingBytecodePayout = player2LockingBytecode;\n            require(tx.outputs[0].lockingBytecode == LockingBytecodePayout);\n        } else {\n            require(tx.outputs[0].tokenAmount == furuTotal / 2);\n            require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n            require(tx.outputs[1].tokenAmount == furuTotal / 2);\n            require(tx.outputs[1].lockingBytecode == player2LockingBytecode);\n        }\n    }\n    // If settlement fails to take place for 5 days, there is a fallback available which returns the funds to the players 50-50\n    // This could be used in case the oracle service fails or the settlement service would stop working\n    function timelockFallback(){\n        // Timelock for 5 days after the normal maturity timestamp\n        require(tx.time >= maturityTimestamp + 432000000);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Read Player2s lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes player2LockingBytecode = commitmentdata.split(8)[1];\n\n        // Funds are then returned 50-50 to the players\n        require(tx.outputs[0].value == totalOuputAmount / 2);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[1].value == totalOuputAmount / 2);\n        require(tx.outputs[1].lockingBytecode == player2LockingBytecode);\n    }\n}\n",
+        "compiler": {
+          "name": "cashc",
+          "version": "0.9.2"
+        },
+        "updatedAt": "2024-09-06T09:39:54.228Z"
+      }
+    }
+  ],
+  "template": {
+    "options": "{\n  \"entities\": {\n    \"common\": {\n      \"variables\": {\n        //-----------------------------------------------------------------------------\n        // Keys\n        //-----------------------------------------------------------------------------\n\n        \"player_1_key\": {\n          \"name\": \"Player 1 Key\",\n          \"type\": \"Key\"\n        },\n        \"player_2_key\": {\n          \"name\": \"Player 2 Key\",\n          \"type\": \"Key\"\n        },\n        \n        //-----------------------------------------------------------------------------\n        // UI Improvements\n        //-----------------------------------------------------------------------------\n\n        // NOTE: The contracts expect a combined \"player_1_prediction_msg\" payload.\n        //       So that user can see the amount on approval, we split this into two vars:\n        //       1. The Price Prediction itself\n        //       2. The Nonce used to prevent replay\n        //       These are then \"concatenated\" in the \"player_1_prediction_raw\" script.\n        \"player_1_prediction\": {\n          \"name\": \"Player 1 Prediction\",\n          \"description\": \"number\",\n          \"type\": \"AddressData\"\n        },\n        \"player_1_prediction_nonce\": {\n          \"name\": \"Player 1 Prediction Nonce\",\n          \"description\": \"number\",\n          \"type\": \"AddressData\"\n        },\n\n        // (Override) Make Player 2's Prediction show as a number.\n        \"player_2_prediction\": {\n          \"name\": \"Player 2 Prediction\",\n          \"type\": \"AddressData\",\n          \"description\": \"number\"\n        },\n\n        // (Override) Make Player 2 Amount label show as \"Stake Amount\"\n        \"player_2_amount\": {\n          \"name\": \"Stake Amount\",\n          \"type\": \"AddressData\",\n          \"description\": \"number\"\n        },\n\n        //-----------------------------------------------------------------------------\n        // Other\n        //-----------------------------------------------------------------------------\n\n        // This is a generic locking bytecode to pay anywhere.\n        \"payout_locking_bytecode\": {\n          \"name\": \"Payout Address\",\n          \"description\": \"lockscript\",\n          \"type\": \"AddressData\"\n        }\n      },\n    }\n  },\n  \"scripts\": {\n    //-----------------------------------------------------------------------------\n\t  // Wallet Signing Scripts\n    //-----------------------------------------------------------------------------\n\n    \"pvp_bch_offer.lock.wallet\": {\n      \"name\": \"Pvp Bch Offer - Lock\",\n      \"script\": \"<player_2_amount> <player_1_locking_bytecode> <resolved.player_1_pubkey_hash> <resolved.game_contract_bch_locking_bytecode> <expiry_timestamp> $(<pvp_bch_offer.bytecode>)\",\n      \"lockingType\": \"p2sh32\"\n    },\n    \"pvp_bch_offer.unlock.cancel.wallet\": {\n      \"name\": \"Pvp Bch Offer - Cancel\",\n      \"script\": \"<player_1_key.public_key> <player_1_key.schnorr_signature.all_outputs> OP_2\",\n      \"unlocks\": \"pvp_bch_offer.lock\"\n    },\n    \"pvp_bch_game.lock.wallet\": {\n      \"name\": \"Pvp Bch Game - Lock\",\n      \"script\": \"<player_1_locking_bytecode> <resolved.player_1_datasig_hash> <resolved.player_1_pubkey> <oracle_public_key> <oracle_fee_locking_bytecode> <dividend_fee_locking_bytecode> <guru_fee_locking_bytecode> <maturity_timestamp> $(<pvp_bch_game.bytecode>)\",\n      \"lockingType\": \"p2sh32\"\n    },\n    \"pvp_furu_offer.lock.wallet\": {\n      \"name\": \"Pvp Furu Offer - Lock\",\n      \"script\": \"<player_2_amount> <player_1_locking_bytecode> <resolved.player_1_pubkey_hash> <furu_depository_contract_locking_bytecode> <resolved.game_contract_furu_locking_bytecode> <expiry_timestamp> $(<pvp_furu_offer.bytecode>)\",\n      \"lockingType\": \"p2sh32\"\n    },\n    \"pvp_furu_offer.unlock.cancel.wallet\": {\n      \"name\": \"Pvp Furu Offer - Cancel\",\n      \"script\": \"<player_1_key.public_key> <player_1_key.schnorr_signature.all_outputs> OP_2\",\n      \"unlocks\": \"pvp_furu_offer.lock\"\n    },\n    \"pvp_furu_game.lock.wallet\": {\n      \"name\": \"Pvp Furu Game - Lock\",\n      \"script\": \"<player_1_locking_bytecode> <resolved.player_1_datasig_hash> <resolved.player_1_pubkey> <oracle_public_key> <maturity_timestamp> $(<pvp_furu_game.bytecode>)\",\n      \"lockingType\": \"p2sh32\"\n    },\n\n    //-----------------------------------------------------------------------------\n    // Resolved Scripts\n    //-----------------------------------------------------------------------------\n\n    // NOTE: We explicitly name these instead of inlining them as we need the\n    //       values of them for redeem script reconstruction later.\n    //       So the scripts above reference these and CashConnect will then include\n    //       these resolved values in its responses. \n    \"resolved.game_contract_bch_locking_bytecode\": {\n      \"script\": \"OP_HASH256 <$(<pvp_bch_game.lock.wallet> OP_HASH256)> OP_EQUAL\"\n    },\n    \"resolved.game_contract_furu_locking_bytecode\": {\n      \"script\": \"OP_HASH256 <$(<pvp_furu_game.lock.wallet> OP_HASH256)> OP_EQUAL\"\n    },\n    \"resolved.furu_depository_locking_bytecode\": {\n      \"script\": \"OP_HASH256 <$(<pvp_furu_depository.lock> OP_HASH256)> OP_EQUAL\"\n    },\n    \"resolved.player_1_pubkey\": {\n      \"script\": \"$(<player_1_key.public_key>)\"\n    },\n    \"resolved.player_1_pubkey_hash\": {\n      \"script\": \"$(<player_1_key.public_key> OP_HASH160)\"\n    },\n    \"resolved.player_1_datasig\": {\n      \"script\": \"$(<player_1_key.schnorr_data_signature.player_1_prediction_raw>)\"\n    },\n    \"resolved.player_1_datasig_hash\": {\n      \"script\": \"$(<resolved.player_1_datasig> OP_SHA256)\"\n    },\n\n    //-----------------------------------------------------------------------------\n    // Misc\n    //-----------------------------------------------------------------------------\n\n    // Generic Locking Bytecode that can pay anywhere.\n    // NOTE: Until we have \"actions\" in templates, this is security issue.\n    //       This could be invoked, on its own, to pay anywhere.\n    //       With actions, it would be confined to being used only in conjunction\n    //       with an input.\n    \"payout.lock\": {\n      \"name\": \"Payout\",\n      \"script\": \"$(<payout_locking_bytecode>)\"\n    },\n    // Concatenate the Prediction and the Nonce.\n    \"player_1_prediction_raw\": {\n      \"name\": \"Player 1 Prediction\",\n      \"script\": \"$(<player_1_prediction> <player_1_prediction_nonce> OP_CAT)\"\n    },\n\n    //-----------------------------------------------------------------------------\n    // Backend\n    //-----------------------------------------------------------------------------\n\n    // NOTE: When the user signs a transaction, we only get a hashed lockscript back.\n    //       We, technically, do not know what that lockscript represents.\n    //       So, we must attempt to \"recreate it\" using the user's resolved vars.\n    //       And then verify that it matches to be sure user isn't spoofing us.\n    //       Typically, we could just use the original scripts generated by the template for this.\n    //       But Guru Offer expects the Guru Game Locking Bytecode as an argument.\n    //       So we have to modify them a little to reference each other.\n    \"pvp_bch_offer.lock.backend\": {\n      \"name\": \"Pvp Bch Offer.lock\",\n      \"script\": \"<player_2_amount>\\n<player_1_locking_bytecode>\\n<player_1_pubkey_hash>\\n<resolved.game_contract_bch_locking_bytecode.backend>\\n<expiry_timestamp>\\n$(<pvp_bch_offer.bytecode>)\",\n      \"lockingType\": \"p2sh32\"\n    },\n    \"resolved.game_contract_bch_locking_bytecode.backend\": {\n      \"script\": \"OP_HASH256 <$(<pvp_bch_game.lock> OP_HASH256)> OP_EQUAL\"\n    },\n    \"pvp_furu_offer.lock.backend\": {\n      \"name\": \"Pvp Furu Offer.lock\",\n      \"script\": \"<player_2_amount>\\n<player_1_locking_bytecode>\\n<player_1_pubkey_hash>\\n<furu_depository_contract_locking_bytecode>\\n<resolved.game_contract_furu_locking_bytecode.backend>\\n<expiry_timestamp>\\n$(<pvp_furu_offer.bytecode>)\",\n      \"lockingType\": \"p2sh32\"\n    },\n    \"resolved.game_contract_furu_locking_bytecode.backend\": {\n      \"script\": \"OP_HASH256 <$(<pvp_furu_game.lock> OP_HASH256)> OP_EQUAL\"\n    },\n  }\n}",
+    "template": {
+      "$schema": "https://ide.bitauth.com/authentication-template-v0.schema.json",
+      "name": "BCH Guru",
+      "description": "An example project",
+      "entities": {
+        "common": {
+          "name": "Common",
+          "variables": {
+            "expiry_timestamp": {
+              "name": "Expiry Timestamp",
+              "type": "AddressData",
+              "description": "unixTimestamp"
+            },
+            "game_contract_bch_locking_bytecode": {
+              "name": "Game Contract Bch Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "player_1_pubkey_hash": {
+              "name": "Player 1 Pubkey Hash",
+              "type": "AddressData"
+            },
+            "player_1_locking_bytecode": {
+              "name": "Player 1 Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "player_2_amount": {
+              "name": "Stake Amount",
+              "type": "AddressData",
+              "description": "number"
+            },
+            "player_2_prediction": {
+              "name": "Player 2 Prediction",
+              "type": "AddressData",
+              "description": "number"
+            },
+            "player_2_locking_bytecode": {
+              "name": "Player 2 Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "player_1_sig": {
+              "name": "Player 1 Sig",
+              "type": "AddressData"
+            },
+            "player_1_pubkey": {
+              "name": "Player 1 Pubkey",
+              "type": "AddressData"
+            },
+            "maturity_timestamp": {
+              "name": "Maturity Timestamp",
+              "type": "AddressData",
+              "description": "unixTimestamp"
+            },
+            "guru_fee_locking_bytecode": {
+              "name": "Guru Fee Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "dividend_fee_locking_bytecode": {
+              "name": "Dividend Fee Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "oracle_fee_locking_bytecode": {
+              "name": "Oracle Fee Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "oracle_public_key": {
+              "name": "Oracle Public Key",
+              "type": "AddressData",
+              "description": "publicKey"
+            },
+            "player_1_datasig_hash": {
+              "name": "Player 1 Datasig Hash",
+              "type": "AddressData"
+            },
+            "player_1_prediction_msg": {
+              "name": "Player 1 Prediction Msg",
+              "type": "AddressData"
+            },
+            "player_1_datasig": {
+              "name": "Player 1 Datasig",
+              "type": "AddressData"
+            },
+            "settlement_message": {
+              "name": "Settlement Message",
+              "type": "AddressData"
+            },
+            "settlement_signature": {
+              "name": "Settlement Signature",
+              "type": "AddressData"
+            },
+            "previous_message": {
+              "name": "Previous Message",
+              "type": "AddressData"
+            },
+            "previous_signature": {
+              "name": "Previous Signature",
+              "type": "AddressData"
+            },
+            "game_contract_furu_locking_bytecode": {
+              "name": "Game Contract Furu Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "furu_depository_contract_locking_bytecode": {
+              "name": "Furu Depository Contract Locking Bytecode",
+              "type": "AddressData",
+              "description": "lockscript"
+            },
+            "player_1_key": {
+              "name": "Player 1 Key",
+              "type": "Key"
+            },
+            "player_2_key": {
+              "name": "Player 2 Key",
+              "type": "Key"
+            },
+            "player_1_prediction": {
+              "name": "Player 1 Prediction",
+              "description": "number",
+              "type": "AddressData"
+            },
+            "player_1_prediction_nonce": {
+              "name": "Player 1 Prediction Nonce",
+              "description": "number",
+              "type": "AddressData"
+            },
+            "payout_locking_bytecode": {
+              "name": "Payout Address",
+              "description": "lockscript",
+              "type": "AddressData"
+            }
+          }
+        }
+      },
+      "scripts": {
+        "pvp_bch_offer.bytecode": {
+          "script": "OP_5\nOP_PICK\nOP_0\nOP_NUMEQUAL\nOP_IF\nOP_INPUTINDEX\nOP_0\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_ROT\nOP_EQUALVERIFY\nOP_0\nOP_UTXOVALUE\nOP_4\nOP_ROLL\nOP_ADD\n<0xe803>\nOP_SUB\nOP_0\nOP_OUTPUTVALUE\nOP_NUMEQUALVERIFY\nOP_4\nOP_PICK\nOP_SIZE\nOP_NIP\nOP_4\nOP_NUMEQUALVERIFY\nOP_4\nOP_PICK\nOP_BIN2NUM\nOP_0\nOP_GREATERTHANOREQUAL\nOP_VERIFY\nOP_5\nOP_PICK\nOP_SIZE\nOP_NIP\n<0x23>\nOP_NUMEQUAL\nOP_IF\nOP_5\nOP_PICK\nOP_2\nOP_SPLIT\nOP_DROP\n<0xaa20>\nOP_EQUALVERIFY\nOP_5\nOP_PICK\n<0x22>\nOP_SPLIT\nOP_NIP\n<0x87>\nOP_EQUALVERIFY\nOP_ELSE\nOP_5\nOP_PICK\nOP_3\nOP_SPLIT\nOP_DROP\n<0x76a914>\nOP_EQUALVERIFY\nOP_5\nOP_PICK\n<0x17>\nOP_SPLIT\nOP_NIP\n<0x88ac>\nOP_EQUALVERIFY\nOP_ENDIF\nOP_2ROT\nOP_SWAP\nOP_CAT\nOP_0\nOP_OUTPUTTOKENCOMMITMENT\nOP_EQUALVERIFY\nOP_2DROP\nOP_2DROP\nOP_1\nOP_ELSE\nOP_5\nOP_PICK\nOP_1\nOP_NUMEQUAL\nOP_IF\nOP_INPUTINDEX\nOP_0\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_4\nOP_ROLL\nOP_EQUALVERIFY\nOP_0\nOP_UTXOVALUE\n<0xe803>\nOP_SUB\nOP_0\nOP_OUTPUTVALUE\nOP_NUMEQUALVERIFY\nOP_CHECKLOCKTIMEVERIFY\nOP_2DROP\nOP_2DROP\nOP_DROP\nOP_1\nOP_ELSE\nOP_5\nOP_ROLL\nOP_2\nOP_NUMEQUALVERIFY\nOP_6\nOP_PICK\nOP_HASH160\nOP_3\nOP_ROLL\nOP_EQUALVERIFY\nOP_2ROT\nOP_SWAP\nOP_CHECKSIGVERIFY\nOP_2DROP\nOP_2DROP\nOP_1\nOP_ENDIF\nOP_ENDIF"
+        },
+        "pvp_bch_offer.lock": {
+          "name": "Pvp Bch Offer.lock",
+          "script": "<player_2_amount>\n<player_1_locking_bytecode>\n<player_1_pubkey_hash>\n<game_contract_bch_locking_bytecode>\n<expiry_timestamp>\n$(<pvp_bch_offer.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_bch_offer.unlock.accept_offer": {
+          "name": "Pvp Bch Offer - Accept Offer",
+          "script": "<player_2_locking_bytecode>\n<player_2_prediction>\nOP_0",
+          "unlocks": "pvp_bch_offer.lock"
+        },
+        "pvp_bch_offer.unlock.expiry": {
+          "name": "Pvp Bch Offer - Expiry",
+          "script": "OP_1",
+          "unlocks": "pvp_bch_offer.lock"
+        },
+        "pvp_bch_offer.unlock.cancel": {
+          "name": "Pvp Bch Offer - Cancel",
+          "script": "<player_1_pubkey>\n<player_1_sig>\nOP_2",
+          "unlocks": "pvp_bch_offer.lock"
+        },
+        "pvp_bch_game.bytecode": {
+          "script": "OP_8\nOP_PICK\nOP_0\nOP_NUMEQUAL\nOP_IF\nOP_10\nOP_PICK\nOP_10\nOP_PICK\nOP_7\nOP_ROLL\nOP_CHECKDATASIGVERIFY\nOP_5\nOP_ROLL\nOP_9\nOP_ROLL\nOP_SHA256\nOP_EQUALVERIFY\nOP_TXINPUTCOUNT\nOP_1\nOP_NUMEQUALVERIFY\nOP_11\nOP_ROLL\nOP_11\nOP_PICK\nOP_6\nOP_PICK\nOP_CHECKDATASIGVERIFY\nOP_9\nOP_ROLL\nOP_9\nOP_PICK\nOP_6\nOP_ROLL\nOP_CHECKDATASIGVERIFY\nOP_8\nOP_PICK\nOP_8\nOP_SPLIT\nOP_NIP\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_DUP\nOP_0\nOP_GREATERTHAN\nOP_VERIFY\nOP_8\nOP_PICK\nOP_8\nOP_SPLIT\nOP_NIP\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_1SUB\nOP_NUMEQUALVERIFY\nOP_8\nOP_ROLL\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_8\nOP_PICK\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_SWAP\nOP_2\nOP_PICK\nOP_LESSTHAN\nOP_VERIFY\nOP_LESSTHANOREQUAL\nOP_VERIFY\nOP_6\nOP_ROLL\nOP_12\nOP_SPLIT\nOP_NIP\nOP_BIN2NUM\nOP_0\nOP_UTXOTOKENCOMMITMENT\nOP_4\nOP_SPLIT\nOP_8\nOP_ROLL\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_3\nOP_PICK\nOP_SUB\nOP_ABS\nOP_ROT\nOP_BIN2NUM\nOP_3\nOP_ROLL\nOP_SUB\nOP_ABS\nOP_0\nOP_UTXOVALUE\n<0xe803>\nOP_SUB\nOP_2\nOP_PICK\nOP_2\nOP_PICK\nOP_NUMNOTEQUAL\nOP_IF\nOP_DUP\nOP_3\nOP_MUL\n<0x64>\nOP_DIV\nOP_0\nOP_OUTPUTVALUE\nOP_OVER\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_6\nOP_PICK\nOP_EQUALVERIFY\nOP_OVER\nOP_2\nOP_MUL\n<0x64>\nOP_DIV\nOP_1\nOP_OUTPUTVALUE\nOP_OVER\nOP_NUMEQUALVERIFY\nOP_1\nOP_OUTPUTBYTECODE\nOP_8\nOP_PICK\nOP_EQUALVERIFY\nOP_2\nOP_PICK\n<0x64>\nOP_DIV\nOP_2\nOP_OUTPUTVALUE\nOP_OVER\nOP_NUMEQUALVERIFY\nOP_2\nOP_OUTPUTBYTECODE\nOP_10\nOP_PICK\nOP_EQUALVERIFY\nOP_2OVER\nOP_SUB\nOP_2\nOP_PICK\nOP_SUB\nOP_OVER\nOP_SUB\nOP_3\nOP_OUTPUTVALUE\nOP_OVER\nOP_NUMEQUALVERIFY\nOP_11\nOP_PICK\nOP_7\nOP_PICK\nOP_7\nOP_PICK\nOP_GREATERTHAN\nOP_IF\nOP_8\nOP_PICK\nOP_NIP\nOP_ENDIF\nOP_3\nOP_OUTPUTBYTECODE\nOP_OVER\nOP_EQUALVERIFY\nOP_2DROP\nOP_2DROP\nOP_DROP\nOP_ELSE\nOP_0\nOP_OUTPUTVALUE\nOP_OVER\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_8\nOP_PICK\nOP_EQUALVERIFY\nOP_1\nOP_OUTPUTVALUE\nOP_OVER\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_1\nOP_OUTPUTBYTECODE\nOP_4\nOP_PICK\nOP_EQUALVERIFY\nOP_ENDIF\nOP_2DROP\nOP_2DROP\nOP_2DROP\nOP_2DROP\nOP_DROP\nOP_1\nOP_ELSE\nOP_8\nOP_ROLL\nOP_1\nOP_NUMEQUALVERIFY\n<0x00ccbf19>\nOP_ADD\nOP_CHECKLOCKTIMEVERIFY\nOP_DROP\nOP_0\nOP_UTXOVALUE\n<0xe803>\nOP_SUB\nOP_0\nOP_UTXOTOKENCOMMITMENT\nOP_8\nOP_SPLIT\nOP_NIP\nOP_0\nOP_OUTPUTVALUE\nOP_2\nOP_PICK\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_9\nOP_ROLL\nOP_EQUALVERIFY\nOP_1\nOP_OUTPUTVALUE\nOP_ROT\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_1\nOP_OUTPUTBYTECODE\nOP_EQUALVERIFY\nOP_2DROP\nOP_2DROP\nOP_2DROP\nOP_1\nOP_ENDIF"
+        },
+        "pvp_bch_game.lock": {
+          "name": "Pvp Bch Game.lock",
+          "script": "<player_1_locking_bytecode>\n<player_1_datasig_hash>\n<player_1_pubkey>\n<oracle_public_key>\n<oracle_fee_locking_bytecode>\n<dividend_fee_locking_bytecode>\n<guru_fee_locking_bytecode>\n<maturity_timestamp>\n$(<pvp_bch_game.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_bch_game.unlock.payout": {
+          "name": "Pvp Bch Game - Payout",
+          "script": "<previous_signature>\n<previous_message>\n<settlement_signature>\n<settlement_message>\n<player_1_datasig>\n<player_1_prediction_msg>\nOP_0",
+          "unlocks": "pvp_bch_game.lock"
+        },
+        "pvp_bch_game.unlock.timelock_fallback": {
+          "name": "Pvp Bch Game - Timelock Fallback",
+          "script": "OP_1",
+          "unlocks": "pvp_bch_game.lock"
+        },
+        "pvp_furu_offer.bytecode": {
+          "script": "OP_6\nOP_PICK\nOP_0\nOP_NUMEQUAL\nOP_IF\nOP_INPUTINDEX\nOP_0\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_ROT\nOP_EQUALVERIFY\nOP_6\nOP_PICK\nOP_SIZE\nOP_NIP\nOP_4\nOP_NUMEQUALVERIFY\nOP_6\nOP_PICK\nOP_BIN2NUM\nOP_0\nOP_GREATERTHANOREQUAL\nOP_VERIFY\nOP_7\nOP_PICK\nOP_SIZE\nOP_NIP\n<0x23>\nOP_NUMEQUAL\nOP_IF\nOP_7\nOP_PICK\nOP_2\nOP_SPLIT\nOP_DROP\n<0xaa20>\nOP_EQUALVERIFY\nOP_7\nOP_PICK\n<0x22>\nOP_SPLIT\nOP_NIP\n<0x87>\nOP_EQUALVERIFY\nOP_ELSE\nOP_7\nOP_PICK\nOP_3\nOP_SPLIT\nOP_DROP\n<0x76a914>\nOP_EQUALVERIFY\nOP_7\nOP_PICK\n<0x17>\nOP_SPLIT\nOP_NIP\n<0x88ac>\nOP_EQUALVERIFY\nOP_ENDIF\nOP_0\nOP_UTXOTOKENAMOUNT\nOP_5\nOP_ROLL\nOP_ADD\nOP_1\nOP_OUTPUTTOKENAMOUNT\nOP_NUMEQUALVERIFY\nOP_1\nOP_OUTPUTTOKENCATEGORY\nOP_0\nOP_UTXOTOKENCATEGORY\nOP_EQUALVERIFY\nOP_1\nOP_OUTPUTBYTECODE\nOP_ROT\nOP_EQUALVERIFY\nOP_2ROT\nOP_SWAP\nOP_CAT\nOP_0\nOP_OUTPUTTOKENCOMMITMENT\nOP_EQUALVERIFY\nOP_0\nOP_OUTPUTTOKENAMOUNT\nOP_0\nOP_NUMEQUALVERIFY\nOP_2DROP\nOP_2DROP\nOP_1\nOP_ELSE\nOP_6\nOP_PICK\nOP_1\nOP_NUMEQUAL\nOP_IF\nOP_INPUTINDEX\nOP_0\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_5\nOP_ROLL\nOP_EQUALVERIFY\nOP_0\nOP_OUTPUTTOKENAMOUNT\nOP_0\nOP_UTXOTOKENAMOUNT\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTTOKENCATEGORY\nOP_0\nOP_UTXOTOKENCATEGORY\nOP_EQUALVERIFY\nOP_CHECKLOCKTIMEVERIFY\nOP_2DROP\nOP_2DROP\nOP_2DROP\nOP_1\nOP_ELSE\nOP_6\nOP_ROLL\nOP_2\nOP_NUMEQUALVERIFY\nOP_7\nOP_PICK\nOP_HASH160\nOP_4\nOP_ROLL\nOP_EQUALVERIFY\nOP_5\nOP_ROLL\nOP_6\nOP_ROLL\nOP_CHECKSIGVERIFY\nOP_2DROP\nOP_2DROP\nOP_DROP\nOP_1\nOP_ENDIF\nOP_ENDIF"
+        },
+        "pvp_furu_offer.lock": {
+          "name": "Pvp Furu Offer.lock",
+          "script": "<player_2_amount>\n<player_1_locking_bytecode>\n<player_1_pubkey_hash>\n<furu_depository_contract_locking_bytecode>\n<game_contract_furu_locking_bytecode>\n<expiry_timestamp>\n$(<pvp_furu_offer.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_furu_offer.unlock.accept_offer": {
+          "name": "Pvp Furu Offer - Accept Offer",
+          "script": "<player_2_locking_bytecode>\n<player_2_prediction>\nOP_0",
+          "unlocks": "pvp_furu_offer.lock"
+        },
+        "pvp_furu_offer.unlock.expiry": {
+          "name": "Pvp Furu Offer - Expiry",
+          "script": "OP_1",
+          "unlocks": "pvp_furu_offer.lock"
+        },
+        "pvp_furu_offer.unlock.cancel": {
+          "name": "Pvp Furu Offer - Cancel",
+          "script": "<player_1_pubkey>\n<player_1_sig>\nOP_2",
+          "unlocks": "pvp_furu_offer.lock"
+        },
+        "pvp_furu_depository.bytecode": {
+          "script": "OP_0\nOP_OUTPOINTTXHASH\nOP_1\nOP_OUTPOINTTXHASH\nOP_EQUALVERIFY\nOP_1\nOP_OUTPOINTINDEX\nOP_1\nOP_NUMEQUAL"
+        },
+        "pvp_furu_depository.lock": {
+          "name": "Pvp Furu Depository.lock",
+          "script": "$(<pvp_furu_depository.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_furu_depository.unlock.reattach": {
+          "name": "Pvp Furu Depository - Reattach",
+          "script": "",
+          "unlocks": "pvp_furu_depository.lock"
+        },
+        "pvp_furu_game.bytecode": {
+          "script": "OP_5\nOP_PICK\nOP_0\nOP_NUMEQUAL\nOP_IF\nOP_7\nOP_PICK\nOP_7\nOP_PICK\nOP_4\nOP_ROLL\nOP_CHECKDATASIGVERIFY\nOP_ROT\nOP_6\nOP_ROLL\nOP_SHA256\nOP_EQUALVERIFY\nOP_TXINPUTCOUNT\nOP_2\nOP_NUMEQUALVERIFY\nOP_INPUTINDEX\nOP_0\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPOINTTXHASH\nOP_1\nOP_OUTPOINTTXHASH\nOP_EQUALVERIFY\nOP_1\nOP_OUTPOINTINDEX\nOP_1\nOP_NUMEQUALVERIFY\nOP_8\nOP_ROLL\nOP_8\nOP_PICK\nOP_3\nOP_PICK\nOP_CHECKDATASIGVERIFY\nOP_6\nOP_ROLL\nOP_6\nOP_PICK\nOP_3\nOP_ROLL\nOP_CHECKDATASIGVERIFY\nOP_5\nOP_PICK\nOP_8\nOP_SPLIT\nOP_NIP\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_DUP\nOP_0\nOP_GREATERTHAN\nOP_VERIFY\nOP_5\nOP_PICK\nOP_8\nOP_SPLIT\nOP_NIP\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_1SUB\nOP_NUMEQUALVERIFY\nOP_5\nOP_ROLL\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_5\nOP_PICK\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_SWAP\nOP_2\nOP_PICK\nOP_LESSTHAN\nOP_VERIFY\nOP_LESSTHANOREQUAL\nOP_VERIFY\nOP_3\nOP_ROLL\nOP_12\nOP_SPLIT\nOP_NIP\nOP_BIN2NUM\nOP_0\nOP_UTXOTOKENCOMMITMENT\nOP_4\nOP_SPLIT\nOP_5\nOP_ROLL\nOP_4\nOP_SPLIT\nOP_DROP\nOP_BIN2NUM\nOP_3\nOP_PICK\nOP_SUB\nOP_ABS\nOP_ROT\nOP_BIN2NUM\nOP_3\nOP_ROLL\nOP_SUB\nOP_ABS\nOP_1\nOP_UTXOTOKENAMOUNT\nOP_2\nOP_PICK\nOP_2\nOP_PICK\nOP_NUMNOTEQUAL\nOP_IF\nOP_0\nOP_OUTPUTTOKENAMOUNT\nOP_OVER\nOP_NUMEQUALVERIFY\nOP_4\nOP_PICK\nOP_2OVER\nOP_GREATERTHAN\nOP_IF\nOP_4\nOP_PICK\nOP_NIP\nOP_ENDIF\nOP_0\nOP_OUTPUTBYTECODE\nOP_OVER\nOP_EQUALVERIFY\nOP_DROP\nOP_ELSE\nOP_0\nOP_OUTPUTTOKENAMOUNT\nOP_OVER\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_5\nOP_PICK\nOP_EQUALVERIFY\nOP_1\nOP_OUTPUTTOKENAMOUNT\nOP_OVER\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_1\nOP_OUTPUTBYTECODE\nOP_4\nOP_PICK\nOP_EQUALVERIFY\nOP_ENDIF\nOP_2DROP\nOP_2DROP\nOP_2DROP\nOP_1\nOP_ELSE\nOP_5\nOP_ROLL\nOP_1\nOP_NUMEQUALVERIFY\n<0x00ccbf19>\nOP_ADD\nOP_CHECKLOCKTIMEVERIFY\nOP_DROP\nOP_0\nOP_UTXOVALUE\n<0xe803>\nOP_SUB\nOP_0\nOP_UTXOTOKENCOMMITMENT\nOP_8\nOP_SPLIT\nOP_NIP\nOP_0\nOP_OUTPUTVALUE\nOP_2\nOP_PICK\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_0\nOP_OUTPUTBYTECODE\nOP_6\nOP_ROLL\nOP_EQUALVERIFY\nOP_1\nOP_OUTPUTVALUE\nOP_ROT\nOP_2\nOP_DIV\nOP_NUMEQUALVERIFY\nOP_1\nOP_OUTPUTBYTECODE\nOP_EQUAL\nOP_NIP\nOP_NIP\nOP_NIP\nOP_ENDIF"
+        },
+        "pvp_furu_game.lock": {
+          "name": "Pvp Furu Game.lock",
+          "script": "<player_1_locking_bytecode>\n<player_1_datasig_hash>\n<player_1_pubkey>\n<oracle_public_key>\n<maturity_timestamp>\n$(<pvp_furu_game.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_furu_game.unlock.payout": {
+          "name": "Pvp Furu Game - Payout",
+          "script": "<previous_signature>\n<previous_message>\n<settlement_signature>\n<settlement_message>\n<player_1_datasig>\n<player_1_prediction_msg>\nOP_0",
+          "unlocks": "pvp_furu_game.lock"
+        },
+        "pvp_furu_game.unlock.timelock_fallback": {
+          "name": "Pvp Furu Game - Timelock Fallback",
+          "script": "OP_1",
+          "unlocks": "pvp_furu_game.lock"
+        },
+        "pvp_bch_offer.lock.wallet": {
+          "name": "Pvp Bch Offer - Lock",
+          "script": "<player_2_amount> <player_1_locking_bytecode> <resolved.player_1_pubkey_hash> <resolved.game_contract_bch_locking_bytecode> <expiry_timestamp> $(<pvp_bch_offer.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_bch_offer.unlock.cancel.wallet": {
+          "name": "Pvp Bch Offer - Cancel",
+          "script": "<player_1_key.public_key> <player_1_key.schnorr_signature.all_outputs> OP_2",
+          "unlocks": "pvp_bch_offer.lock"
+        },
+        "pvp_bch_game.lock.wallet": {
+          "name": "Pvp Bch Game - Lock",
+          "script": "<player_1_locking_bytecode> <resolved.player_1_datasig_hash> <resolved.player_1_pubkey> <oracle_public_key> <oracle_fee_locking_bytecode> <dividend_fee_locking_bytecode> <guru_fee_locking_bytecode> <maturity_timestamp> $(<pvp_bch_game.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_furu_offer.lock.wallet": {
+          "name": "Pvp Furu Offer - Lock",
+          "script": "<player_2_amount> <player_1_locking_bytecode> <resolved.player_1_pubkey_hash> <furu_depository_contract_locking_bytecode> <resolved.game_contract_furu_locking_bytecode> <expiry_timestamp> $(<pvp_furu_offer.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "pvp_furu_offer.unlock.cancel.wallet": {
+          "name": "Pvp Furu Offer - Cancel",
+          "script": "<player_1_key.public_key> <player_1_key.schnorr_signature.all_outputs> OP_2",
+          "unlocks": "pvp_furu_offer.lock"
+        },
+        "pvp_furu_game.lock.wallet": {
+          "name": "Pvp Furu Game - Lock",
+          "script": "<player_1_locking_bytecode> <resolved.player_1_datasig_hash> <resolved.player_1_pubkey> <oracle_public_key> <maturity_timestamp> $(<pvp_furu_game.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "resolved.game_contract_bch_locking_bytecode": {
+          "script": "OP_HASH256 <$(<pvp_bch_game.lock.wallet> OP_HASH256)> OP_EQUAL"
+        },
+        "resolved.game_contract_furu_locking_bytecode": {
+          "script": "OP_HASH256 <$(<pvp_furu_game.lock.wallet> OP_HASH256)> OP_EQUAL"
+        },
+        "resolved.furu_depository_locking_bytecode": {
+          "script": "OP_HASH256 <$(<pvp_furu_depository.lock> OP_HASH256)> OP_EQUAL"
+        },
+        "resolved.player_1_pubkey": {
+          "script": "$(<player_1_key.public_key>)"
+        },
+        "resolved.player_1_pubkey_hash": {
+          "script": "$(<player_1_key.public_key> OP_HASH160)"
+        },
+        "resolved.player_1_datasig": {
+          "script": "$(<player_1_key.schnorr_data_signature.player_1_prediction_raw>)"
+        },
+        "resolved.player_1_datasig_hash": {
+          "script": "$(<resolved.player_1_datasig> OP_SHA256)"
+        },
+        "payout.lock": {
+          "name": "Payout",
+          "script": "$(<payout_locking_bytecode>)"
+        },
+        "player_1_prediction_raw": {
+          "name": "Player 1 Prediction",
+          "script": "$(<player_1_prediction> <player_1_prediction_nonce> OP_CAT)"
+        },
+        "pvp_bch_offer.lock.backend": {
+          "name": "Pvp Bch Offer.lock",
+          "script": "<player_2_amount>\n<player_1_locking_bytecode>\n<player_1_pubkey_hash>\n<resolved.game_contract_bch_locking_bytecode.backend>\n<expiry_timestamp>\n$(<pvp_bch_offer.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "resolved.game_contract_bch_locking_bytecode.backend": {
+          "script": "OP_HASH256 <$(<pvp_bch_game.lock> OP_HASH256)> OP_EQUAL"
+        },
+        "pvp_furu_offer.lock.backend": {
+          "name": "Pvp Furu Offer.lock",
+          "script": "<player_2_amount>\n<player_1_locking_bytecode>\n<player_1_pubkey_hash>\n<furu_depository_contract_locking_bytecode>\n<resolved.game_contract_furu_locking_bytecode.backend>\n<expiry_timestamp>\n$(<pvp_furu_offer.bytecode>)",
+          "lockingType": "p2sh32"
+        },
+        "resolved.game_contract_furu_locking_bytecode.backend": {
+          "script": "OP_HASH256 <$(<pvp_furu_game.lock> OP_HASH256)> OP_EQUAL"
+        }
+      },
+      "supported": [
+        "BCH_2022_05"
+      ],
+      "version": 0
+    }
+  },
+  "signers": [
+    {
+      "chains": [
+        "bch:bchtest"
+      ],
+      "methods": [
+        "bch_signTransaction_V0"
+      ],
+      "events": [
+        "balancesChanged"
+      ],
+      "sessionProperties": {
+        "signerKey": "player_1_key",
+        "allowedTokens": [
+          "*"
+        ]
+      },
+      "tests": [
+        {
+          "name": "Sign Guru Offer",
+          "description": "Example Sign Transaction",
+          "method": "bch_signTransaction_V0",
+          "payload": "[\n  {\n    \"userPrompt\": \"Sign Guru Offer\",\n    \"signerKey\": \"player_1_key\",\n    \"transaction\": {\n      \"outputs\": [\n        {\n          \"script\": \"lock_guru_offer_sign\",\n          \"data\": {\n            // Guru Offer Variables\n            \"guru_offer_expiry_timestamp\": 1696820028,\n            \"guru_offer_satoshis_staked\": 50000,\n            // Guru Game Variables\n            \"guru_maturity_timestamp\": 1696820028,\n            \"guru_fee_locking_bytecode\": \"bchtest:qp3c3vgsp7dxxzjze546xwlxr9pz5jz4eu3nhjt2p0\",\n            \"guru_oracle_public_key\": \"0x02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818\",\n            \"guru_player_1_locking_bytecode\": \"bchtest:qp3c3vgsp7dxxzjze546xwlxr9pz5jz4eu3nhjt2p0\",\n            \"guru_player_1_prediction\": 10000\n          },\n          \"valueSatoshis\": 50000\n        }\n      ]\n    }\n  }\n]",
+          "response": "[\n  {\n    \"transactionHash\": \"<Uint8Array: 0xa8a4ea9c611de2026eafe7f054edc7601c3ded601e291b2e62f322eca601b0b1>\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointIndex\": 1,\n          \"outpointTransactionHash\": \"<Uint8Array: 0x6dbf16ea735410af5004f21f7463469986ca5a4eecf0ed19464e609492f1cc57>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x418bca1d27d15bedda7f7bebb0def253c86caa0edb719881a61f6373419bcb1f04cce3a649e08d56980b290f8e0df9ae4dd865859034593d8ba9a4b64fb9903daa41210256630104a11743601c8148d5a4edb66fd588430377f8d74cf736fe31f272d631>\"\n        }\n      ],\n      \"locktime\": 0,\n      \"outputs\": [\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0xaa2070cdc2ef10010de8415a1255a813da97f94d8e875be9dae78a19795a03f7ac0c87>\",\n          \"valueSatoshis\": \"<bigint: 50000n>\",\n          \"resolvedVariables\": {\n            \"resolved_player_1_pubkey_hash\": \"<Uint8Array: 0x142ba99d24669adca3e74698810eb247673ea03ce0>\",\n            \"resolved_player_1_datasig_hash\": \"<Uint8Array: 0x206b4fa0b7d0629fb52dd5759e1faf5930035873e2b6b2a6385c6e3c8150377073>\",\n            \"resolved_player_1_pubkey\": \"<Uint8Array: 0x210264c571cd561a32cb313f42b44266b44d0ec178ea28c8ab1c3b1b587885dd0f37>\",\n            \"lock_guru_sign\": \"<Uint8Array: 0x1976a9146388b1100f9a630a42cd2ba33be619422a4855cf88ac21206b4fa0b7d0629fb52dd5759e1faf5930035873e2b6b2a6385c6e3c815037707322210264c571cd561a32cb313f42b44266b44d0ec178ea28c8ab1c3b1b587885dd0f372102d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd28181976a9146388b1100f9a630a42cd2ba33be619422a4855cf88ac043c6b236557795779557abb537a567aa888c3519d587a58795479bb567a5679547abb5579587f77547f75817600a0695579587f77547f75818c9d557a547f75815579547f75817c52799f69a169537a5c7f778100cf587f557a537994907b81537a949000c602e8039476599501649651cc789d51cd567a8894527952799e6300cc789d547970a0635479776800cd7888756700cc7852969d00cd55798852cc7852969d52cd547988686d6d7551>\",\n            \"resolved_guru_contract_locking_bytecode\": \"<Uint8Array: 0xaa20acf305ee5873ec2aa46a9111554753dc0562e49bf29992f6af27853145856d2887>\"\n          }\n        },\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n          \"valueSatoshis\": \"<bigint: 7914467n>\"\n        }\n      ],\n      \"version\": 2\n    },\n    \"sourceOutputs\": [\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n        \"valueSatoshis\": \"<bigint: 7964700n>\"\n      }\n    ]\n  }\n]"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "bch_signTransaction_V0"
+      ],
+      "events": [
+        "balancesChanged"
+      ],
+      "sessionProperties": {
+        "signerKey": "player_2_key",
+        "allowedTokens": [
+          "*"
+        ]
+      },
+      "tests": [
+        {
+          "name": "Sign Accept Offer",
+          "description": "Example Sign Transaction",
+          "method": "bch_signTransaction_V0",
+          "payload": "[\n  {\n    \"userPrompt\": \"Accept Offer\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointTransactionHash\": \"0xd1f5299984a2ff466c86ea5529dcd60a97233805ac33f1e5de3ee8628be68692\",\n          \"outpointIndex\": 0,\n          \"script\": \"unlock_guru_offer_accept_offer\",\n          \"data\": {\n            // Guru Offer Variables\n            \"guru_offer_expiry_timestamp\": 1696820028,\n            \"guru_offer_satoshis_staked\": 50000,\n            \"guru_offer_player_1_pubkey\": \"0x210264c571cd561a32cb313f42b44266b44d0ec178ea28c8ab1c3b1b587885dd0f37\",\n            \"guru_offer_player_1_pubkey_hash\": \"0x142ba99d24669adca3e74698810eb247673ea03ce0\",\n            \"guru_offer_guru_contract_locking_bytecode\": \"0xaa20acf305ee5873ec2aa46a9111554753dc0562e49bf29992f6af27853145856d2887\",\n            // Guru Offer - Accept Variables\n            \"guru_offer_accept_offer_player_2_locking_bytecode\": \"0x76a9146388b1100f9a630a42cd2ba33be619422a4855cf88ac\",\n            \"guru_offer_accept_offer_player_2_prediction\": \"0x50c3000000000000\"\n          }\n        }\n      ],\n      \"outputs\": [\n        {\n          \"script\": \"lock_guru\",\n          \"data\": {\n            // Guru Game Locking Script Details\n            \"guru_maturity_timestamp\": 1696820028,\n            \"guru_fee_locking_bytecode\": \"bchtest:qp3c3vgsp7dxxzjze546xwlxr9pz5jz4eu3nhjt2p0\",\n            \"guru_oracle_public_key\": \"0x02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818\",\n            \"guru_player_1_locking_bytecode\": \"bchtest:qp3c3vgsp7dxxzjze546xwlxr9pz5jz4eu3nhjt2p0\",\n            \"guru_player_1_pubkey\": \"0x210264c571cd561a32cb313f42b44266b44d0ec178ea28c8ab1c3b1b587885dd0f37\",\n            \"guru_player_1_datasig_hash\": \"0x206b4fa0b7d0629fb52dd5759e1faf5930035873e2b6b2a6385c6e3c8150377073\"\n          },\n          \"valueSatoshis\": 99000,\n          \"token\": {\n            \"category\": \"0xd1f5299984a2ff466c86ea5529dcd60a97233805ac33f1e5de3ee8628be68692\",\n            \"amount\": 0,\n            \"nft\": {\n              \"capability\": \"none\",\n              \"commitment\": \"0x50c300000000000076a9146388b1100f9a630a42cd2ba33be619422a4855cf88ac\"\n            }\n          }\n        }\n      ]\n    }\n  }\n]",
+          "response": "[\n  {\n    \"transactionHash\": \"<Uint8Array: 0x2b52577075dc82c44b85b4d43336afeb44fecf7d2b0e6e1fe763c7ff47f4632c>\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointIndex\": 0,\n          \"outpointTransactionHash\": \"<Uint8Array: 0xd1f5299984a2ff466c86ea5529dcd60a97233805ac33f1e5de3ee8628be68692>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x1976a9146388b1100f9a630a42cd2ba33be619422a4855cf88ac0850c3000000000000004ca50350c30015142ba99d24669adca3e74698810eb247673ea03ce023aa20acf305ee5873ec2aa46a9111554753dc0562e49bf29992f6af27853145856d2887043c6b23655479009c63c0009d00cd7b8800c6537a9302e8039400cc9d537a547a7e76827701219d00d287777777675479519c63c0009d0376a914537a7e0288ac7e00cd8800c602e8039400cc9db16d6d5167547a529d5579a9537a88537a547aac7777776868>\"\n        },\n        {\n          \"outpointIndex\": 1,\n          \"outpointTransactionHash\": \"<Uint8Array: 0xd1f5299984a2ff466c86ea5529dcd60a97233805ac33f1e5de3ee8628be68692>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x414cff8b91ae71a2fa22c5c43262706fb2fc0d4fbb203ee870db0e6ef25eed5aa389854cfdc6b10fe52b7f95a1877b812ad75e5be03316ccb8ba2094d3691d5a7c41210256630104a11743601c8148d5a4edb66fd588430377f8d74cf736fe31f272d631>\"\n        }\n      ],\n      \"locktime\": 0,\n      \"outputs\": [\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0xaa20acf305ee5873ec2aa46a9111554753dc0562e49bf29992f6af27853145856d2887>\",\n          \"token\": {\n            \"category\": \"<Uint8Array: 0xd1f5299984a2ff466c86ea5529dcd60a97233805ac33f1e5de3ee8628be68692>\",\n            \"amount\": \"<bigint: 0n>\",\n            \"nft\": {\n              \"capability\": \"none\",\n              \"commitment\": \"<Uint8Array: 0x50c300000000000076a9146388b1100f9a630a42cd2ba33be619422a4855cf88ac>\"\n            }\n          },\n          \"valueSatoshis\": \"<bigint: 99000n>\",\n          \"resolvedVariables\": {}\n        },\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n          \"valueSatoshis\": \"<bigint: 8164256n>\"\n        }\n      ],\n      \"version\": 2\n    },\n    \"sourceOutputs\": [\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0xaa2070cdc2ef10010de8415a1255a813da97f94d8e875be9dae78a19795a03f7ac0c87>\",\n        \"valueSatoshis\": \"<bigint: 50000n>\"\n      },\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n        \"valueSatoshis\": \"<bigint: 8213801n>\"\n      }\n    ]\n  }\n]"
+        }
+      ],
+      "chains": [
+        "bch:bchtest"
+      ]
+    }
+  ],
+  "signer": {
+    "chains": [
+      "bch:bchtest"
+    ],
+    "methods": [
+      "bch_signTransaction_V0",
+      "bch_getBalance_V0",
+      "bch_getTokens_V0",
+      "wc_authRequest",
+      "bch_signMessage_V0"
+    ],
+    "events": [
+      "balancesChanged"
+    ],
+    "allowedTokens": [
+      "*"
+    ],
+    "template": ""
+  },
+  "tests": [
+    {
+      "name": "BCH - Create Offer",
+      "description": "Example Sign Transaction",
+      "method": "bch_signTransaction_V0",
+      "payload": "[\n  {\n    \"signerKey\": \"player_1_key\",\n    \"userPrompt\": \"Sign Guru Offer\",\n    \"transaction\": {\n      \"outputs\": [\n        {\n          \"script\": \"pvp_bch_offer.lock.wallet\",\n          \"data\": {\n            // Guru Offer Variables\n            \"expiry_timestamp\": 1701344789,\n            \"player_2_amount\": 10000,\n            // Guru Game Variables\n            \"maturity_timestamp\": 1701344789,\n            \"fee_locking_bytecode\": \"bitcoincash:qzv0p883f0suqjh7z5808xef3jrhukxp8ydzmtz35e\",\n            \"oracle_public_key\": \"0x02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818\",\n            \"player_1_locking_bytecode\": \"bchtest:qrttgxmvydxt7jlc00jhxafmf4deq2x5es6n2uuy8t\",\n            \"player_1_prediction\": 12000\n          },\n          \"valueSatoshis\": 10000\n        }\n      ]\n    }\n  }\n]",
+      "response": "[\n  {\n    \"transactionHash\": \"<Uint8Array: 0xaf9760a9a9ec728403fe2bd8d82aa8c46674e687a3435eb3a72b9ced5c9301e3>\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointIndex\": 1,\n          \"outpointTransactionHash\": \"<Uint8Array: 0xfb9722667a982cf169bb3e63c08b2c89ab5a354e4eafa31eee4061008bbb2960>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x41bd1f37625b3b3de2b0bcfb633926677262f8082077d1424acdddce75be296121ed93609abaf30bfbca678de8c409a07991f0902733cff81a245ae862dfc2e35741210256630104a11743601c8148d5a4edb66fd588430377f8d74cf736fe31f272d631>\"\n        }\n      ],\n      \"locktime\": 0,\n      \"outputs\": [\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0xaa205c4cb2ab08895b44a1812f4f56a4eec7e73a31cc165c8d2ee687352e1505026887>\",\n          \"valueSatoshis\": \"<bigint: 10000n>\",\n          \"resolvedVariables\": {\n            \"resolved.player_1_pubkey_hash\": \"<Uint8Array: 0x4e5fcf46df7244491805378388afa5dcdfe231ab>\",\n            \"resolved.player_1_datasig\": \"<Uint8Array: 0xf8f611a7f1284230aa46e85e04e2a91ce73fc051038d06a858a82d2f4c0e26495113cb51fb6c35ba4f2e7236606c7f02e6179cd9163ac93b2544fc6116842ae1>\",\n            \"resolved.player_1_datasig_hash\": \"<Uint8Array: 0x30a2acb1cba7474a20144e809938b23afeea1f9e58b2871f528960b0a73f7bc0>\",\n            \"resolved.player_1_pubkey\": \"<Uint8Array: 0x039ac4791474bce928ea489675525691a4c4183a47e908b37086af93037ade0c56>\",\n            \"pvp_bch_game.bytecode\": \"<Uint8Array: 0x57795779557abb537a567aa888c3519d587a58795479bb567a5679547abb5579587f77547f75817600a0695579587f77547f75818c9d557a547f75815579547f75817c52799f69a169537a5c7f778100cf587f557a537994907b81537a949000c602e8039476569501649600cc789d00cd567a8894527952799e6351cc789d547970a0635479776851cd7888756751cc7852969d51cd55798852cc7852969d52cd547988686d6d7551>\",\n            \"pvp_bch_game.lock.wallet\": \"<Uint8Array: 0x1976a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac2030a2acb1cba7474a20144e809938b23afeea1f9e58b2871f528960b0a73f7bc021039ac4791474bce928ea489675525691a4c4183a47e908b37086af93037ade0c562102d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd28181976a91498f09cf14be1c04afe150ef39b298c877e58c13988ac041576686557795779557abb537a567aa888c3519d587a58795479bb567a5679547abb5579587f77547f75817600a0695579587f77547f75818c9d557a547f75815579547f75817c52799f69a169537a5c7f778100cf587f557a537994907b81537a949000c602e8039476569501649600cc789d00cd567a8894527952799e6351cc789d547970a0635479776851cd7888756751cc7852969d51cd55798852cc7852969d52cd547988686d6d7551>\",\n            \"resolved.game_contract_bch_locking_bytecode\": \"<Uint8Array: 0xaa2080f00cfa943d2b7567b0eec101cbb570b654fbce0d7f4a133f4e7d90239afe7787>\",\n            \"pvp_bch_offer.bytecode\": \"<Uint8Array: 0x5579009c63c0009d00cd7b8800c6547a9302e8039400cc9d717c7e76827701219d00d2886d6d51675579519c63c0009d00cd547a8800c602e8039400cc9db16d6d755167557a529d5679a9537a88717cad6d6d516868>\"\n          }\n        },\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n          \"valueSatoshis\": \"<bigint: 5162625n>\"\n        }\n      ],\n      \"version\": 2\n    },\n    \"sourceOutputs\": [\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n        \"valueSatoshis\": \"<bigint: 5172858n>\"\n      }\n    ]\n  }\n]"
+    },
+    {
+      "name": "BCH - Cancel Offer",
+      "description": "Example Sign Transaction",
+      "method": "bch_signTransaction_V0",
+      "payload": "[\n  {\n    \"userPrompt\": \"Cancel Guru Offer\",\n    \"signerKey\": \"player_1_key\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointTransactionHash\": \"0x6145ad4ad0e1ab5074db1ea27336cf15fefd756cbf89391adac76031a40c45a4\",\n          \"outpointIndex\": 0,\n          \"script\": \"pvp_bch_offer.unlock.cancel.wallet\",\n          \"data\": {\n            // Locking Script Details\n            \"expiry_timestamp\": 1701344789,\n            \"player_2_amount\": 10000,\n            \"game_contract_bch_locking_bytecode\": \"0xaa20973044e0b734a8060d070b2339a601d7748c8e035ba820cfaa4a8dfedec5de0387\",\n            \"player_1_pubkey_hash\": \"0xf2f5ca084b32a5a941ba279d1109eafc8371e5e2\"\n          }\n        }\n      ]\n    }\n  }\n]",
+      "response": "[\n  {\n    \"transactionHash\": \"<Uint8Array: 0x68e5fc30af47733ac631cde0d1c7c03d63715015051baa52fcb51fb65fab9553>\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointIndex\": 0,\n          \"outpointTransactionHash\": \"<Uint8Array: 0x6145ad4ad0e1ab5074db1ea27336cf15fefd756cbf89391adac76031a40c45a4>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x2103b2254b89380a5867dd4ee4188590f5f380e21430718abd9b0c2f79f3def35bd4416b9c158ea9e60fb283773fa421465b21279e67daa9ce9092472bc45143db975f5bc7b917e2f216bfa117fbf14293c6a3b2fed2e392785ce0926e0833e2c3301a41524ca302102714f2f5ca084b32a5a941ba279d1109eafc8371e5e223aa20973044e0b734a8060d070b2339a601d7748c8e035ba820cfaa4a8dfedec5de038704157668655479009c63c0009d00cd7b8800c6537a9302e8039400cc9d537a547a7e76827701219d00d287777777675479519c63c0009d0376a914537a7e0288ac7e00cd8800c602e8039400cc9db16d6d5167547a529d5579a9537a88537a547aac7777776868>\"\n        }\n      ],\n      \"locktime\": 0,\n      \"outputs\": [\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n          \"valueSatoshis\": \"<bigint: 9643n>\"\n        }\n      ],\n      \"version\": 2\n    },\n    \"sourceOutputs\": [\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0xaa20378b11d5392cb029b90f64097c0f05a63627f6a4feae9c025adaf116be98642c87>\",\n        \"valueSatoshis\": \"<bigint: 10000n>\"\n      }\n    ]\n  }\n]"
+    },
+    {
+      "name": "BCH - Accept Offer",
+      "description": "Example Sign Transaction",
+      "method": "bch_signTransaction_V0",
+      "payload": "    [\n      {\n        \"userPrompt\": \"Accept Guru Offer\",\n        \"signerKey\": \"player_2_key\",\n        \"transaction\": {\n          \"inputs\": [\n            {\n              \"outpointTransactionHash\": \"0x4a2fb7a44686840b42eab1be319c08da8857e9b71337012ca1d86c3b1eec4a4b\",\n              \"outpointIndex\": 0,\n              \"script\": \"pvp_bch_offer.unlock.accept_offer\",\n              \"data\": {\n                // Guru Offer Locking Script Details\n                \"expiry_timestamp\": 1701344789,\n                \"player_2_amount\": 10000,\n                \"game_contract_bch_locking_bytecode\": \"0xaa20973044e0b734a8060d070b2339a601d7748c8e035ba820cfaa4a8dfedec5de0387\",\n                \"player_1_pubkey_hash\": \"0xf2f5ca084b32a5a941ba279d1109eafc8371e5e2\",\n\n                // Guru Offer Unlocking Script Details\n                \"player_2_locking_bytecode\": \"bitcoincash:qrzsjducsucem80x2csr5lzksdz74enznqsthz7l2p\",\n                \"player_2_prediction\": \"0xe02e000000000000\"\n              }\n            }\n          ],\n          \"outputs\": [\n            {\n              \"script\": \"pvp_bch_game.lock\",\n              \"data\": {\n                // Guru Game Locking Script Details\n                \"maturity_timestamp\": 1701344789,\n                \"fee_locking_bytecode\": \"bitcoincash:qzv0p883f0suqjh7z5808xef3jrhukxp8ydzmtz35e\",\n                \"oracle_public_key\": \"0x02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818\",\n                \"player_1_locking_bytecode\": \"bitcoincash:qrzsjducsucem80x2csr5lzksdz74enznqsthz7l2p\",\n                \"player_1_pubkey\": \"0x03b2254b89380a5867dd4ee4188590f5f380e21430718abd9b0c2f79f3def35bd4\",\n                \"player_1_datasig_hash\": \"0x3250b0e06fce3c073935234c6901df59f811d15114df7b7912309d2a27f15d64\"\n              },\n              \"valueSatoshis\": 19000,\n              \"token\": {\n                \"amount\": 1,\n                \"nft\": {\n                  \"capability\": \"none\",\n                  \"commitment\": \"0xe02e00000000000076a914c509379887319d9de656203a7c568345eae6629888ac\"\n                },\n                \"category\": \"0x4a2fb7a44686840b42eab1be319c08da8857e9b71337012ca1d86c3b1eec4a4b\"\n              }\n            }\n          ]\n        }\n      }\n    ]",
+      "response": "[\n  {\n    \"transactionHash\": \"<Uint8Array: 0x9fb90e92531650ee6a34a3dc004407c69f87fb92a509f005deb22209006e67fa>\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointIndex\": 0,\n          \"outpointTransactionHash\": \"<Uint8Array: 0x4a2fb7a44686840b42eab1be319c08da8857e9b71337012ca1d86c3b1eec4a4b>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x1976a914c509379887319d9de656203a7c568345eae6629888ac08e02e000000000000004ca302102714f2f5ca084b32a5a941ba279d1109eafc8371e5e223aa20973044e0b734a8060d070b2339a601d7748c8e035ba820cfaa4a8dfedec5de038704157668655479009c63c0009d00cd7b8800c6537a9302e8039400cc9d537a547a7e76827701219d00d287777777675479519c63c0009d0376a914537a7e0288ac7e00cd8800c602e8039400cc9db16d6d5167547a529d5579a9537a88537a547aac7777776868>\"\n        },\n        {\n          \"outpointIndex\": 1,\n          \"outpointTransactionHash\": \"<Uint8Array: 0x4a2fb7a44686840b42eab1be319c08da8857e9b71337012ca1d86c3b1eec4a4b>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x4142177494137634580d2a349d16feb1f140c3a0bb4824d8331152c0bc6fdc9f4898537c885fe66f716046aaea45f0c755c0ea934e8b4fcfa117aa90e22236027241210256630104a11743601c8148d5a4edb66fd588430377f8d74cf736fe31f272d631>\"\n        }\n      ],\n      \"locktime\": 0,\n      \"outputs\": [\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0xaa20973044e0b734a8060d070b2339a601d7748c8e035ba820cfaa4a8dfedec5de0387>\",\n          \"token\": {\n            \"amount\": \"<bigint: 1n>\",\n            \"nft\": {\n              \"capability\": \"none\",\n              \"commitment\": \"<Uint8Array: 0xe02e00000000000076a914c509379887319d9de656203a7c568345eae6629888ac>\"\n            },\n            \"category\": \"<Uint8Array: 0x4a2fb7a44686840b42eab1be319c08da8857e9b71337012ca1d86c3b1eec4a4b>\"\n          },\n          \"valueSatoshis\": \"<bigint: 19000n>\",\n          \"resolvedVariables\": {\n            \"pvp_bch_game.bytecode\": \"<Uint8Array: 0x57795779557abb537a567aa888c3519d587a58795479bb567a5679547abb5579587f77547f75817600a0695579587f77547f75818c9d557a547f75815579547f75817c52799f69a169537a5c7f778100cf587f557a537994907b81537a949000c602e8039476569501649600cc789d00cd567a8894527952799e6351cc789d547970a0635479776851cd7888756751cc7852969d51cd55798852cc7852969d52cd547988686d6d7551>\"\n          }\n        },\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n          \"valueSatoshis\": \"<bigint: 6082618n>\"\n        }\n      ],\n      \"version\": 2\n    },\n    \"sourceOutputs\": [\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0xaa20378b11d5392cb029b90f64097c0f05a63627f6a4feae9c025adaf116be98642c87>\",\n        \"valueSatoshis\": \"<bigint: 10000n>\"\n      },\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n        \"valueSatoshis\": \"<bigint: 6092162n>\"\n      }\n    ]\n  }\n]"
+    },
+    {
+      "name": "BCH - Expire Offer",
+      "description": "Example Sign Transaction",
+      "method": "bch_signTransaction_V0",
+      "payload": "[\n  {\n    \"signerKey\": \"player_1_key\",\n    \"userPrompt\": \"Expire Guru Offer\",\n    \"transaction\": {\n      \"locktime\": 1701344789,\n      \"inputs\": [\n        {\n          \"outpointTransactionHash\": \"0xaf9760a9a9ec728403fe2bd8d82aa8c46674e687a3435eb3a72b9ced5c9301e3\",\n          \"outpointIndex\": 0,\n          \"script\": \"pvp_bch_offer.unlock.expiry\",\n          \"data\": {\n            // Locking Script Details\n            \"expiry_timestamp\": 1701344789,\n            \"player_2_amount\": 10000,\n            \"game_contract_bch_locking_bytecode\": \"0xaa2080f00cfa943d2b7567b0eec101cbb570b654fbce0d7f4a133f4e7d90239afe7787\",\n            \"player_1_pubkey_hash\": \"0x4e5fcf46df7244491805378388afa5dcdfe231ab\",\n            \"player_1_locking_bytecode\": \"bchtest:qrttgxmvydxt7jlc00jhxafmf4deq2x5es6n2uuy8t\",\n          },\n          \"valueSatoshis\": 10000\n        }\n      ],\n      \"outputs\": [\n        {\n          \"script\": \"payout.lock\",\n          \"data\": {\n            \"payout_locking_bytecode\": \"bchtest:qrttgxmvydxt7jlc00jhxafmf4deq2x5es6n2uuy8t\",\n          },\n          \"valueSatoshis\": 9000\n        }\n      ]\n    },\n  }\n]",
+      "response": "[\n  {\n    \"transactionHash\": \"<Uint8Array: 0x5d286935ae081ae1b4ac4b5c5d774c4ba3d12fc4cbd332a8ef4e8473a14900af>\",\n    \"transaction\": {\n      \"inputs\": [\n        {\n          \"outpointIndex\": 0,\n          \"outpointTransactionHash\": \"<Uint8Array: 0xaf9760a9a9ec728403fe2bd8d82aa8c46674e687a3435eb3a72b9ced5c9301e3>\",\n          \"sequenceNumber\": 0,\n          \"unlockingBytecode\": \"<Uint8Array: 0x514cb10210271976a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac144e5fcf46df7244491805378388afa5dcdfe231ab23aa2080f00cfa943d2b7567b0eec101cbb570b654fbce0d7f4a133f4e7d90239afe778704157668655579009c63c0009d00cd7b8800c6547a9302e8039400cc9d717c7e76827701219d00d2886d6d51675579519c63c0009d00cd547a8800c602e8039400cc9db16d6d755167557a529d5679a9537a88717cad6d6d516868>\"\n        }\n      ],\n      \"locktime\": 1701344789,\n      \"outputs\": [\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n          \"valueSatoshis\": \"<bigint: 9000n>\",\n          \"resolvedVariables\": {}\n        },\n        {\n          \"lockingBytecode\": \"<Uint8Array: 0x76a914d6b41b6c234cbf4bf87be573753b4d5b9028d4cc88ac>\",\n          \"valueSatoshis\": \"<bigint: 697n>\"\n        }\n      ],\n      \"version\": 2\n    },\n    \"sourceOutputs\": [\n      {\n        \"lockingBytecode\": \"<Uint8Array: 0xaa205c4cb2ab08895b44a1812f4f56a4eec7e73a31cc165c8d2ee687352e1505026887>\",\n        \"valueSatoshis\": \"<bigint: 10000n>\"\n      }\n    ]\n  }\n]"
+    }
+  ]
+}

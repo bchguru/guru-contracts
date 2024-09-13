@@ -1,0 +1,71 @@
+pragma cashscript ^0.9.2;
+
+// Furu-Play smart contract
+// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.
+// First Player1 makes a furu offer to predict the price for a certain asset at a certain time
+// This offer contract is funded and makes Player1 commit to his secret prediction
+// Secondly Player2 accepts the bet by adding a predetermined amount of FURU tokens to the Furu offer
+// He adds his prediction and payout address to the NFT of the Furu contract
+// Both players have now commited to their prediction inside the Furu contract
+// The prediction of Player1 is revealed at payout
+
+contract PvpFuruOffer(
+    int expiryTimestamp,
+    bytes35 gameContractFuruLockingBytecode, // p2sh32 lockingBytecode
+    bytes35 furuDepositoryContractLockingBytecode, // p2sh32 lockingBytecode
+    bytes20 player1PubkeyHash,
+    bytes player1LockingBytecode,
+    int player2Amount
+) {
+    function acceptOffer(
+        bytes4 player2Prediction,
+        bytes25 player2LockingBytecode // p2pkh lockingBytecode
+    ) {
+        require(this.activeInputIndex == 0);
+        require(tx.outputs[0].lockingBytecode == gameContractFuruLockingBytecode);
+
+        // Require that Player 2's prediction is 4 bytes long and a positive number.
+        require(player2Prediction.length == 4);
+        require(int(player2Prediction) >= 0);
+
+        // Require that the Locking Bytecode is P2SH32 if it is 35 bytes long.
+        // OP_HASH256[0xaa] OP_DATA_32[0x20] <32 bytes> OP_EQUAL[0x87]
+        if(player2LockingBytecode.length == 35) {
+            require(player2LockingBytecode.split(2)[0] == 0xaa20);
+            require(player2LockingBytecode.split(34)[1] == 0x87);
+        }
+
+        // Otherwise, require that the Locking Bytecode is P2PKH.
+        // OP_DUP[0x76] OP_HASH160[0xa9] OP_DATA_20[0x14] <20 bytes> OP_EQUALVERIFY[0x88] OP_CHECKSIG[0xac]
+        else {
+            require(player2LockingBytecode.split(3)[0] == 0x76a914);
+            require(player2LockingBytecode.split(23)[1] == 0x88ac);
+        }
+
+        // tokens to furu depository covenant
+        int totalFuruAmount = tx.inputs[0].tokenAmount + player2Amount;
+        require(tx.outputs[1].tokenAmount == totalFuruAmount);
+        require(tx.outputs[1].tokenCategory == tx.inputs[0].tokenCategory);
+        require(tx.outputs[1].lockingBytecode == furuDepositoryContractLockingBytecode);
+
+        // verify NFTcommitment data
+        bytes dataPlayer2 = player2Prediction + player2LockingBytecode;
+        require(tx.outputs[0].nftCommitment == dataPlayer2);
+        require(tx.outputs[0].tokenAmount == 0);
+    }
+    function expiry(
+    ) {
+        require(this.activeInputIndex == 0);
+        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);
+        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount);
+        require(tx.outputs[0].tokenCategory == tx.inputs[0].tokenCategory);
+        require(tx.time >= expiryTimestamp);
+    }
+    function cancel(
+        sig player1Sig,
+        pubkey player1Pubkey
+    ) {
+        require(hash160(player1Pubkey) == player1PubkeyHash);
+        require(checkSig(player1Sig, player1Pubkey));
+    }
+}

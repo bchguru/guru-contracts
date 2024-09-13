@@ -1,0 +1,13 @@
+pragma cashscript ^0.9.2;
+
+// FuruDepository is created along the furu contract
+// The contract holds the furu tokens to be paid out to the winner
+
+contract PvpFuruDepository(
+) {
+    function reattach() {
+        // FuruDepository can only be moved along side furu contract
+        require(tx.inputs[0].outpointTransactionHash == tx.inputs[1].outpointTransactionHash);
+        require(tx.inputs[1].outpointIndex == 1);
+    }
+}

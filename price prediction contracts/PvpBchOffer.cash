@@ -1,0 +1,69 @@
+pragma cashscript ^0.9.2;
+
+// BCH Guru smart contract
+// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.
+// First Player1 makes a guru offer to predict the price for some asset at a certain time
+// This offer contract is funded and makes Player1 commit to his secret prediction
+// Secondly Player2 accepts the bet by adding a predetermined amount BCH to the Guru offer
+// He adds his prediction and payout address to the NFT of the Guru contract
+// Both players have now commited to their prediction inside the Guru contract
+// The prediction of Player1 is revealed at payout
+
+// Opcode count: 59 (max 201)
+// Bytesize: 98 excl. constructor args (max 520)
+
+contract PvpBchOffer(
+    int expiryTimestamp,
+    bytes35 gameContractBchLockingBytecode, // p2sh32 lockingBytecode, player 1 commits to his prediction with the hash of his datasig
+    bytes20 player1PubkeyHash,
+    bytes player1LockingBytecode,
+    int player2Amount
+) {
+    function acceptOffer(
+        bytes4 player2Prediction,
+        bytes25 player2LockingBytecode // p2pkh lockingBytecode
+    ) {
+        require(this.activeInputIndex == 0);
+        require(tx.outputs[0].lockingBytecode == gameContractBchLockingBytecode);
+
+        int totalAmount = tx.inputs[0].value + player2Amount - 1000;
+        require(tx.outputs[0].value == totalAmount);
+
+        // Require that Player 2's prediction is 4 bytes long and a positive number.
+        require(player2Prediction.length == 4);
+        require(int(player2Prediction) >= 0);
+
+        // Require that the Locking Bytecode is P2SH32 if it is 35 bytes long.
+        // OP_HASH256[0xaa] OP_DATA_32[0x20] <32 bytes> OP_EQUAL[0x87]
+        if(player2LockingBytecode.length == 35) {
+            require(player2LockingBytecode.split(2)[0] == 0xaa20);
+            require(player2LockingBytecode.split(34)[1] == 0x87);
+        }
+
+        // Otherwise, require that the Locking Bytecode is P2PKH.
+        // OP_DUP[0x76] OP_HASH160[0xa9] OP_DATA_20[0x14] <20 bytes> OP_EQUALVERIFY[0x88] OP_CHECKSIG[0xac]
+        else {
+            require(player2LockingBytecode.split(3)[0] == 0x76a914);
+            require(player2LockingBytecode.split(23)[1] == 0x88ac);
+        }
+
+        // require correct NFTcommitment data (max 40 bytes)
+        bytes dataPlayer2 = player2Prediction + player2LockingBytecode;
+        require(tx.outputs[0].nftCommitment == dataPlayer2);
+    }
+    function expiry(
+    ) {
+        require(this.activeInputIndex == 0);
+        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);
+        int amountAfterFee = tx.inputs[0].value - 1000;
+        require(tx.outputs[0].value == amountAfterFee);
+        require(tx.time >= expiryTimestamp);
+    }
+    function cancel(
+        sig player1Sig,
+        pubkey player1Pubkey
+    ) {
+        require(hash160(player1Pubkey) == player1PubkeyHash);
+        require(checkSig(player1Sig,player1Pubkey));
+    }
+}

@@ -1,0 +1,79 @@
+{
+  "contractName": "PvpBchGame",
+  "constructorInputs": [
+    {
+      "name": "maturityTimestamp",
+      "type": "int"
+    },
+    {
+      "name": "guruFeeLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "dividendFeeLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "oracleFeeLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "oraclePublicKey",
+      "type": "pubkey"
+    },
+    {
+      "name": "player1Pubkey",
+      "type": "pubkey"
+    },
+    {
+      "name": "player1DatasigHash",
+      "type": "bytes32"
+    },
+    {
+      "name": "player1LockingBytecode",
+      "type": "bytes"
+    }
+  ],
+  "abi": [
+    {
+      "name": "payout",
+      "inputs": [
+        {
+          "name": "player1PredictionMsg",
+          "type": "bytes"
+        },
+        {
+          "name": "player1Datasig",
+          "type": "datasig"
+        },
+        {
+          "name": "settlementMessage",
+          "type": "bytes"
+        },
+        {
+          "name": "settlementSignature",
+          "type": "datasig"
+        },
+        {
+          "name": "previousMessage",
+          "type": "bytes"
+        },
+        {
+          "name": "previousSignature",
+          "type": "datasig"
+        }
+      ]
+    },
+    {
+      "name": "timelockFallback",
+      "inputs": []
+    }
+  ],
+  "bytecode": "OP_8 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_10 OP_PICK OP_10 OP_PICK OP_7 OP_ROLL OP_CHECKDATASIGVERIFY OP_5 OP_ROLL OP_9 OP_ROLL OP_SHA256 OP_EQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_11 OP_ROLL OP_11 OP_PICK OP_6 OP_PICK OP_CHECKDATASIGVERIFY OP_9 OP_ROLL OP_9 OP_PICK OP_6 OP_ROLL OP_CHECKDATASIGVERIFY OP_8 OP_PICK OP_8 OP_SPLIT OP_NIP OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_DUP OP_0 OP_GREATERTHAN OP_VERIFY OP_8 OP_PICK OP_8 OP_SPLIT OP_NIP OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_1SUB OP_NUMEQUALVERIFY OP_8 OP_ROLL OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_8 OP_PICK OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_SWAP OP_2 OP_PICK OP_LESSTHAN OP_VERIFY OP_LESSTHANOREQUAL OP_VERIFY OP_6 OP_ROLL OP_12 OP_SPLIT OP_NIP OP_BIN2NUM OP_0 OP_UTXOTOKENCOMMITMENT OP_4 OP_SPLIT OP_8 OP_ROLL OP_4 OP_SPLIT OP_DROP OP_BIN2NUM OP_3 OP_PICK OP_SUB OP_ABS OP_ROT OP_BIN2NUM OP_3 OP_ROLL OP_SUB OP_ABS OP_0 OP_UTXOVALUE e803 OP_SUB OP_2 OP_PICK OP_2 OP_PICK OP_NUMNOTEQUAL OP_IF OP_DUP OP_3 OP_MUL 64 OP_DIV OP_0 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_6 OP_PICK OP_EQUALVERIFY OP_OVER OP_2 OP_MUL 64 OP_DIV OP_1 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_8 OP_PICK OP_EQUALVERIFY OP_2 OP_PICK 64 OP_DIV OP_2 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_2 OP_OUTPUTBYTECODE OP_10 OP_PICK OP_EQUALVERIFY OP_2OVER OP_SUB OP_2 OP_PICK OP_SUB OP_OVER OP_SUB OP_3 OP_OUTPUTVALUE OP_OVER OP_NUMEQUALVERIFY OP_11 OP_PICK OP_7 OP_PICK OP_7 OP_PICK OP_GREATERTHAN OP_IF OP_8 OP_PICK OP_NIP OP_ENDIF OP_3 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_2DROP OP_2DROP OP_DROP OP_ELSE OP_0 OP_OUTPUTVALUE OP_OVER OP_2 OP_DIV OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_8 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_OVER OP_2 OP_DIV OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_4 OP_PICK OP_EQUALVERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_8 OP_ROLL OP_1 OP_NUMEQUALVERIFY 00ccbf19 OP_ADD OP_CHECKLOCKTIMEVERIFY OP_DROP OP_0 OP_UTXOVALUE e803 OP_SUB OP_0 OP_UTXOTOKENCOMMITMENT OP_8 OP_SPLIT OP_NIP OP_0 OP_OUTPUTVALUE OP_2 OP_PICK OP_2 OP_DIV OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_9 OP_ROLL OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_ROT OP_2 OP_DIV OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_EQUALVERIFY OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ENDIF",
+  "source": "pragma cashscript ^0.9.2;\n\n// BCH Guru smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a guru offer to predict the price for some asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 matches the funds locked in the Guru offer\n// He adds his prediction and payout address to the NFT of the Guru contract\n// Both players have now commited to their prediction inside the Guru contract\n// The prediction of Player1 is revealed at payout\n\n/*  ---NFT State---\n    bytes4 predictionPlayer2\n    bytes lockingBytecodePlayer2, // p2pkh or p2sh lockingBytecode\n*/\n\ncontract PvpBchGame(\n    int maturityTimestamp,\n    bytes guruFeeLockingBytecode,\n    bytes dividendFeeLockingBytecode,\n    bytes oracleFeeLockingBytecode,\n    pubkey oraclePublicKey,\n    pubkey player1Pubkey,\n    bytes32 player1DatasigHash,\n    bytes player1LockingBytecode // p2pkh lockingBytecode\n) {\n    function payout(\n        bytes player1PredictionMsg, // bytes4 prediction + bytes4 nonce \n        datasig player1Datasig, // revealed after contract creation\n        bytes settlementMessage,\n        datasig settlementSignature,\n        bytes previousMessage,\n        datasig previousSignature,\n    ) {\n    \t// Authenticate predictionMsgPlayer1 with the hash its datasignature\n        require(checkDataSig(player1Datasig, player1PredictionMsg, player1Pubkey));\n        require(player1DatasigHash == sha256(player1Datasig));\n\n        // Check that only a single input is used in this transaction\n        require(tx.inputs.length == 1);\n\n        // Authenticate the current and previous oracle message.\n        require(checkDataSig(previousSignature, previousMessage, oraclePublicKey));\n        require(checkDataSig(settlementSignature, settlementMessage, oraclePublicKey));\n\n        // Extract previous message's content sequence.\n        int previousSequence = int(previousMessage.split(8)[1].split(4)[0]);\n\n        // If the \"content sequence\" is negative it represents metadata rather than a price message\n        // and cannot be used inside the contract.\n        require(previousSequence > 0);\n\n        // Extract settlement message's content sequence.\n        int settlementSequence = int(settlementMessage.split(8)[1].split(4)[0]);\n\n        // Assert that the two messages connect without gaps.\n        require(settlementSequence - 1 == previousSequence);\n\n        // Extract the previous message's timestamp.\n        int previousTimestamp = int(previousMessage.split(4)[0]);\n        // Extract the settlement message's timestamp.\n        int settlementTimestamp = int(settlementMessage.split(4)[0]);\n\n        // Require previousTimestamp is before - and settlementTimestamp is after maturityTimestamp\n        require(previousTimestamp < maturityTimestamp);\n        require(settlementTimestamp >= maturityTimestamp);\n\n         // Extract the settlement message's price.\n        int oraclePrice = int(settlementMessage.split(12)[1]);\n\n        // Read Player2s prediction & lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes predictionPlayer2Bytes, bytes lockingBytecodePlayer2= commitmentdata.split(4);\n\n        // Read Player1s prediction\n        bytes predictionPlayer1Bytes = player1PredictionMsg.split(4)[0];\n        int predictionPlayer1 = int(predictionPlayer1Bytes);\n\n        // Calculate which player predicted the oracleprice at maturity better\n        int predictionErrorP1 = abs(predictionPlayer1 - oraclePrice);\n        int predictionPlayer2 = int(predictionPlayer2Bytes);\n        int predictionErrorP2 = abs(predictionPlayer2 - oraclePrice);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Other payout address is the player who was close to the settlet oracle price\n        // Or a 50-50 return when both players were just equally far off.\n        if (predictionErrorP1 != predictionErrorP2) {\n            // Require 3% fee (of the totalOuputAmount) to be paid out on index0 to guru fee address\n            int guruFee = totalOuputAmount * 3 / 100;\n            require(tx.outputs[0].value == guruFee);\n            require(tx.outputs[0].lockingBytecode == guruFeeLockingBytecode);\n\n            // Require 2% fee (of the totalOuputAmount) to be paid out on index1 to guru dividend address\n            int dividendFee = totalOuputAmount * 2 / 100;\n            require(tx.outputs[1].value == dividendFee);\n            require(tx.outputs[1].lockingBytecode == dividendFeeLockingBytecode);\n\n            // Require 1% fee (of the totalOuputAmount) to be paid out on index2 to oracle fee address\n            int oracleFee = totalOuputAmount / 100;\n            require(tx.outputs[2].value == oracleFee);\n            require(tx.outputs[2].lockingBytecode == oracleFeeLockingBytecode);\n\n            int remainingBalance = totalOuputAmount - guruFee - dividendFee - oracleFee;\n\n            require(tx.outputs[3].value == remainingBalance);\n            bytes LockingBytecodePayout = player1LockingBytecode;\n            if(predictionErrorP1 > predictionErrorP2) LockingBytecodePayout = lockingBytecodePlayer2;\n            require(tx.outputs[3].lockingBytecode == LockingBytecodePayout);\n        } else {\n            require(tx.outputs[0].value == totalOuputAmount / 2);\n            require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n            require(tx.outputs[1].value == totalOuputAmount / 2);\n            require(tx.outputs[1].lockingBytecode == lockingBytecodePlayer2);\n        }\n    }\n    // If settlement fails to take place for 5 days, there is a fallback available which returns the funds to the players 50-50\n    // This could be used in case the oracle service fails or the settlement service would stop working\n    function timelockFallback(){\n        // Timelock for 5 days after the normal maturity timestamp\n        require(tx.time >= maturityTimestamp + 432000000);\n\n        // Calculate total output amount after miner fee\n        int totalOuputAmount = tx.inputs[0].value - 1000;\n\n        // Read Player2s lockingbytecode\n        bytes commitmentdata = tx.inputs[0].nftCommitment;\n        bytes player2LockingBytecode = commitmentdata.split(8)[1];\n\n        // Funds are then returned 50-50 to the players\n        require(tx.outputs[0].value == totalOuputAmount / 2);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[1].value == totalOuputAmount / 2);\n        require(tx.outputs[1].lockingBytecode == player2LockingBytecode);\n    }\n}",
+  "compiler": {
+    "name": "cashc",
+    "version": "0.9.2"
+  },
+  "updatedAt": "2024-07-23T03:23:41.489Z"
+}

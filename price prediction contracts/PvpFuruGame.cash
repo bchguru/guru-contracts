@@ -1,0 +1,123 @@
+pragma cashscript ^0.9.2;
+
+// Furu-Play smart contract
+// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.
+// First Player1 makes a guru offer to predict the price for some asset at a certain time
+// This offer contract is funded and makes Player1 commit to his secret prediction
+// Secondly Player2 matches the funds locked in the Furu offer
+// He adds his prediction and payout address to the NFT of the Furu contract
+// Both players have now commited to their prediction inside the Furu contract
+// The prediction of Player1 is revealed at payout
+
+/*  ---NFT State---
+    bytes4 predictionPlayer2
+    bytes25 lockingBytecodePlayer2, // p2pkh lockingBytecode
+*/
+
+contract PvpFuruGame(
+    int maturityTimestamp,
+    pubkey oraclePublicKey,
+    pubkey player1Pubkey,
+    bytes32 player1DatasigHash,
+    bytes25 player1LockingBytecode // p2pkh lockingBytecode
+) {
+    function payout(
+    	bytes player1PredictionMsg,
+    	datasig player1Datasig, // revealed after contract creation
+    	bytes settlementMessage,
+        datasig settlementSignature,
+        bytes previousMessage,
+        datasig previousSignature,
+    ) {
+    	// Authenticate predictionPlayer1 with the hash its datasignature
+        require(checkDataSig(player1Datasig, player1PredictionMsg, player1Pubkey));
+        require(player1DatasigHash == sha256(player1Datasig));
+
+        // Check that there ar 2 inputs with Furu Contract at input index 0
+        require(tx.inputs.length == 2);
+        require(this.activeInputIndex == 0);
+
+        // Furu,Contract can only be moved along side FuruDepository
+        require(tx.inputs[0].outpointTransactionHash == tx.inputs[1].outpointTransactionHash);
+        require(tx.inputs[1].outpointIndex == 1);
+
+        // Authenticate the current and previous oracle message.
+        require(checkDataSig(previousSignature, previousMessage, oraclePublicKey));
+        require(checkDataSig(settlementSignature, settlementMessage, oraclePublicKey));
+
+        // Extract previous message's content sequence.
+        int previousSequence = int(previousMessage.split(8)[1].split(4)[0]);
+
+        // If the "content sequence" is negative it represents metadata rather than a price message
+        // and cannot be used inside the contract.
+        require(previousSequence > 0);
+
+        // Extract settlement message's content sequence.
+        int settlementSequence = int(settlementMessage.split(8)[1].split(4)[0]);
+
+        // Assert that the two messages connect without gaps.
+        require(settlementSequence - 1 == previousSequence);
+
+        // Extract the previous message's timestamp.
+        int previousTimestamp = int(previousMessage.split(4)[0]);
+        // Extract the settlement message's timestamp.
+        int settlementTimestamp = int(settlementMessage.split(4)[0]);
+
+        // Require previousTimestamp is before - and settlementTimestamp is after maturityTimestamp
+        require(previousTimestamp < maturityTimestamp);
+        require(settlementTimestamp >= maturityTimestamp);
+
+         // Extract the settlement message's price.
+        int oraclePrice = int(settlementMessage.split(12)[1]);
+
+        // Read Player2s prediction & lockingbytecode
+        bytes commitmentdata = tx.inputs[0].nftCommitment;
+        bytes predictionPlayer2Bytes, bytes player2LockingBytecode = commitmentdata.split(4);
+
+        // Read Player1s prediction
+        bytes predictionPlayer1Bytes = player1PredictionMsg.split(4)[0];
+        int predictionPlayer1 = int(predictionPlayer1Bytes);
+
+        // Calculate which player predicted the oracleprice at maturity better
+        int predictionErrorP1 = abs(predictionPlayer1 - oraclePrice);
+        int player2Prediction = int(predictionPlayer2Bytes);
+        int predictionErrorP2 = abs(player2Prediction - oraclePrice);
+
+        // No need for platform fees
+        // Getting total furu amount through introspection
+        int furuTotal = tx.inputs[1].tokenAmount;
+
+        // Other payout address is the player who was close to the settlet oracle price
+        // Or a 50-50 return when both players were just equally far off.
+        if (predictionErrorP1 != predictionErrorP2) {
+            require(tx.outputs[0].tokenAmount == furuTotal);
+            bytes LockingBytecodePayout = player1LockingBytecode;
+            if(predictionErrorP1 > predictionErrorP2) LockingBytecodePayout = player2LockingBytecode;
+            require(tx.outputs[0].lockingBytecode == LockingBytecodePayout);
+        } else {
+            require(tx.outputs[0].tokenAmount == furuTotal / 2);
+            require(tx.outputs[0].lockingBytecode == player1LockingBytecode);
+            require(tx.outputs[1].tokenAmount == furuTotal / 2);
+            require(tx.outputs[1].lockingBytecode == player2LockingBytecode);
+        }
+    }
+    // If settlement fails to take place for 5 days, there is a fallback available which returns the funds to the players 50-50
+    // This could be used in case the oracle service fails or the settlement service would stop working
+    function timelockFallback(){
+        // Timelock for 5 days after the normal maturity timestamp
+        require(tx.time >= maturityTimestamp + 432000000);
+
+        // Calculate total output amount after miner fee
+        int totalOuputAmount = tx.inputs[0].value - 1000;
+
+        // Read Player2s lockingbytecode
+        bytes commitmentdata = tx.inputs[0].nftCommitment;
+        bytes player2LockingBytecode = commitmentdata.split(8)[1];
+
+        // Funds are then returned 50-50 to the players
+        require(tx.outputs[0].value == totalOuputAmount / 2);
+        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);
+        require(tx.outputs[1].value == totalOuputAmount / 2);
+        require(tx.outputs[1].lockingBytecode == player2LockingBytecode);
+    }
+}

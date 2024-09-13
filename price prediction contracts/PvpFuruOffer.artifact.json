@@ -1,0 +1,68 @@
+{
+  "contractName": "PvpFuruOffer",
+  "constructorInputs": [
+    {
+      "name": "expiryTimestamp",
+      "type": "int"
+    },
+    {
+      "name": "gameContractFuruLockingBytecode",
+      "type": "bytes35"
+    },
+    {
+      "name": "furuDepositoryContractLockingBytecode",
+      "type": "bytes35"
+    },
+    {
+      "name": "player1PubkeyHash",
+      "type": "bytes20"
+    },
+    {
+      "name": "player1LockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "player2Amount",
+      "type": "int"
+    }
+  ],
+  "abi": [
+    {
+      "name": "acceptOffer",
+      "inputs": [
+        {
+          "name": "player2Prediction",
+          "type": "bytes4"
+        },
+        {
+          "name": "player2LockingBytecode",
+          "type": "bytes25"
+        }
+      ]
+    },
+    {
+      "name": "expiry",
+      "inputs": []
+    },
+    {
+      "name": "cancel",
+      "inputs": [
+        {
+          "name": "player1Sig",
+          "type": "sig"
+        },
+        {
+          "name": "player1Pubkey",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_6 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_6 OP_PICK OP_SIZE OP_NIP OP_4 OP_NUMEQUALVERIFY OP_6 OP_PICK OP_BIN2NUM OP_0 OP_GREATERTHANOREQUAL OP_VERIFY OP_7 OP_PICK OP_SIZE OP_NIP 23 OP_NUMEQUAL OP_IF OP_7 OP_PICK OP_2 OP_SPLIT OP_DROP aa20 OP_EQUALVERIFY OP_7 OP_PICK 22 OP_SPLIT OP_NIP 87 OP_EQUALVERIFY OP_ELSE OP_7 OP_PICK OP_3 OP_SPLIT OP_DROP 76a914 OP_EQUALVERIFY OP_7 OP_PICK 17 OP_SPLIT OP_NIP 88ac OP_EQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENAMOUNT OP_5 OP_ROLL OP_ADD OP_1 OP_OUTPUTTOKENAMOUNT OP_NUMEQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_UTXOTOKENCATEGORY OP_EQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_2ROT OP_SWAP OP_CAT OP_0 OP_OUTPUTTOKENCOMMITMENT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_NUMEQUALVERIFY OP_2DROP OP_2DROP OP_1 OP_ELSE OP_6 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_5 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_UTXOTOKENAMOUNT OP_NUMEQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_UTXOTOKENCATEGORY OP_EQUALVERIFY OP_CHECKLOCKTIMEVERIFY OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ELSE OP_6 OP_ROLL OP_2 OP_NUMEQUALVERIFY OP_7 OP_PICK OP_HASH160 OP_4 OP_ROLL OP_EQUALVERIFY OP_5 OP_ROLL OP_6 OP_ROLL OP_CHECKSIGVERIFY OP_2DROP OP_2DROP OP_DROP OP_1 OP_ENDIF OP_ENDIF",
+  "source": "pragma cashscript ^0.9.2;\n\n// Furu-Play smart contract\n// Two-player game where the goal is to most accurately predict the price of an asset some time in the future.\n// First Player1 makes a furu offer to predict the price for a certain asset at a certain time\n// This offer contract is funded and makes Player1 commit to his secret prediction\n// Secondly Player2 accepts the bet by adding a predetermined amount of FURU tokens to the Furu offer\n// He adds his prediction and payout address to the NFT of the Furu contract\n// Both players have now commited to their prediction inside the Furu contract\n// The prediction of Player1 is revealed at payout\n\ncontract PvpFuruOffer(\n    int expiryTimestamp,\n    bytes35 gameContractFuruLockingBytecode, // p2sh32 lockingBytecode\n    bytes35 furuDepositoryContractLockingBytecode, // p2sh32 lockingBytecode\n    bytes20 player1PubkeyHash,\n    bytes player1LockingBytecode,\n    int player2Amount\n) {\n    function acceptOffer(\n        bytes4 player2Prediction,\n        bytes25 player2LockingBytecode // p2pkh lockingBytecode\n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == gameContractFuruLockingBytecode);\n        \n        // Require that Player 2's prediction is 4 bytes long and a positive number.\n        require(player2Prediction.length == 4);\n        require(int(player2Prediction) >= 0);\n\n        // Require that the Locking Bytecode is P2SH32 if it is 35 bytes long.\n        // OP_HASH256[0xaa] OP_DATA_32[0x20] <32 bytes> OP_EQUAL[0x87]\n        if(player2LockingBytecode.length == 35) {\n            require(player2LockingBytecode.split(2)[0] == 0xaa20);\n            require(player2LockingBytecode.split(34)[1] == 0x87);\n        }\n\n        // Otherwise, require that the Locking Bytecode is P2PKH.\n        // OP_DUP[0x76] OP_HASH160[0xa9] OP_DATA_20[0x14] <20 bytes> OP_EQUALVERIFY[0x88] OP_CHECKSIG[0xac]\n        else {\n            require(player2LockingBytecode.split(3)[0] == 0x76a914);\n            require(player2LockingBytecode.split(23)[1] == 0x88ac);\n        }\n\n        // tokens to furu depository covenant\n        int totalFuruAmount = tx.inputs[0].tokenAmount + player2Amount;\n        require(tx.outputs[1].tokenAmount == totalFuruAmount);\n        require(tx.outputs[1].tokenCategory == tx.inputs[0].tokenCategory);\n        require(tx.outputs[1].lockingBytecode == furuDepositoryContractLockingBytecode);\n\n        // verify NFTcommitment data\n        bytes dataPlayer2 = player2Prediction + player2LockingBytecode;\n        require(tx.outputs[0].nftCommitment == dataPlayer2);\n        require(tx.outputs[0].tokenAmount == 0);\n    }\n    function expiry(    \n    ) {\n        require(this.activeInputIndex == 0);\n        require(tx.outputs[0].lockingBytecode == player1LockingBytecode);\n        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount);\n        require(tx.outputs[0].tokenCategory == tx.inputs[0].tokenCategory);\n        require(tx.time >= expiryTimestamp);\n    } \n    function cancel(\n        sig player1Sig,\n        pubkey player1Pubkey\n    ) {\n        require(hash160(player1Pubkey) == player1PubkeyHash);\n        require(checkSig(player1Sig, player1Pubkey));\n    } \n}\n",
+  "compiler": {
+    "name": "cashc",
+    "version": "0.9.2"
+  },
+  "updatedAt": "2024-07-23T03:23:41.546Z"
+}
